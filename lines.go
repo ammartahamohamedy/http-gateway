@@ -6,14 +6,14 @@ import (
 	"strings"
 )
 
-func streamLines(file io.ReadCloser) <-chan string {
+func streamLines(source io.ReadCloser) <-chan string {
 	linesChan := make(chan string)
 
 	go func() {
 		defer close(linesChan)
 		defer func() {
-			if err := file.Close(); err != nil {
-				log.Fatal(err)
+			if err := source.Close(); err != nil {
+				log.Printf("closing input: %v", err)
 			}
 		}()
 
@@ -21,7 +21,7 @@ func streamLines(file io.ReadCloser) <-chan string {
 		readBuffer := make([]byte, 8)
 
 		for {
-			bytesRead, err := file.Read(readBuffer)
+			bytesRead, err := source.Read(readBuffer)
 
 			if bytesRead > 0 {
 				chunk := string(readBuffer[:bytesRead])
@@ -39,7 +39,8 @@ func streamLines(file io.ReadCloser) <-chan string {
 				if err == io.EOF {
 					break
 				}
-				log.Fatal(err)
+				log.Printf("reading input: %v", err)
+				return
 			}
 		}
 
