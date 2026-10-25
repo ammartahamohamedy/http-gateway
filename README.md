@@ -25,6 +25,14 @@ go run . -addr 127.0.0.1:9000
 
 Press `Ctrl+C` to stop the server.
 
+## Tests
+
+```sh
+go test -v ./...
+```
+
+Tests cover line splitting, fragmented reads, read and close failures, input cleanup, and streaming over an in-memory connection.
+
 ## Manual verification
 
 With the server listening on `127.0.0.1:9000`, run this command in a second terminal:
