@@ -9,7 +9,9 @@ HTTP from TCP in Go.
 
 ## Current usage
 
-The program currently reads incoming TCP data line by line and prints it to the console. Connections are handled one at a time.
+The program parses one HTTP/1.1 request-line per TCP connection, prints its fields, and closes the connection. Connections are handled one at a time. Headers and bodies are not parsed, and the server does not send an HTTP response.
+
+Request-lines require CRLF termination and single-space separators. The size limit is 8192 bytes, excluding the two-byte CRLF terminator. Method tokens are case-sensitive and preserved as received.
 
 From the project directory, start the listener:
 
@@ -31,25 +33,24 @@ Press `Ctrl+C` to stop the server.
 go test -v ./...
 ```
 
-Tests cover line splitting, fragmented reads, read and close failures, input cleanup, and streaming over an in-memory connection.
+Tests cover request-line parsing, validation, and shared CRLF reading, including size limits, empty lines, fragmented reads, and preservation of subsequent bytes.
 
 ## Manual verification
 
 With the server listening on `127.0.0.1:9000`, run this command in a second terminal:
 
 ```sh
-python -c "import socket; s=socket.create_connection(('127.0.0.1',9000)); s.sendall(b'Hello over TCP\n\nA line longer than eight bytes\nFinal line without newline'); s.shutdown(socket.SHUT_WR); s.close()"
+python -c "import socket; s=socket.create_connection(('127.0.0.1',9000)); s.settimeout(5); s.sendall(b'GET /hello?name=Gopher HTTP/1.1\r\n'); assert s.recv(1) == b''; s.close()"
 ```
 
 Expected server output:
 
 ```text
 Connection accepted
-Hello over TCP
-
-A line longer than eight bytes
-Final line without newline
+Method: GET
+Request target: /hello?name=Gopher
+Version: 1.1
 Connection closed
 ```
 
-This checks a blank line, a line longer than the eight-byte read buffer, and a final line without a trailing newline. Run the client command again to check that the server accepts another connection without restarting.
+The client keeps its sending side open while waiting for the server to close the connection. This checks that parsing completes at CRLF without waiting for client EOF. Run the client command again to check that the server accepts another connection without restarting.

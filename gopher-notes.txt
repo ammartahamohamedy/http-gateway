@@ -1,7 +1,0 @@
-Hey!
-One curious Gopher opened this file.
-Small buffer, big ambitions.
-
-This line is deliberately longer than eight bytes to keep the reader working.
-Still reading?
-That's all, Gopher.
