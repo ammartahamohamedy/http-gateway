@@ -1,4 +1,4 @@
-module github.com/ammartahamohamedy/http-gateway
+module github.com/ammartahamohamedy/http-gateway/gateway
 
 go 1.27.1
 

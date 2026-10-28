@@ -7,7 +7,7 @@ import (
 	"log"
 	"net"
 
-	"github.com/ammartahamohamedy/http-gateway/internal/http1"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 )
 
 func main() {
