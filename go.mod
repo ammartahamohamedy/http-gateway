@@ -1,4 +1,4 @@
-module github.com/ammartahamohamedy/http-from-tcp
+module github.com/ammartahamohamedy/http-gateway
 
 go 1.27.1
 
