@@ -7,6 +7,8 @@ import (
 	"io"
 	"regexp"
 	"strings"
+
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 )
 
 // These are local implementation limits, not protocol-wide maxima. The section
@@ -19,6 +21,9 @@ const (
 )
 
 var (
+	// ErrInvalidHost reports a missing, repeated, or invalid request Host field.
+	ErrInvalidHost = fields.ErrInvalidHost
+
 	// ErrHeaderLineTooLong reports a physical header line over 8192 content bytes.
 	ErrHeaderLineTooLong = errors.New("http1: header line exceeds 8192 bytes")
 	// ErrHeadersTooLarge reports a header section over 32768 bytes, including CRLFs.
@@ -30,21 +35,28 @@ var (
 // headerNamePattern matches a nonempty ASCII token (RFC 9110, Section 5.6.2).
 var headerNamePattern = regexp.MustCompile("\\A[A-Za-z0-9!#$%&'*+.^_`|~-]+\\z")
 
-// HeaderField stores one header field's name and value without validation or
-// normalization. Headers slices can retain repeated fields as separate entries
-// in their original order; this type does not combine values.
-type HeaderField struct {
-	Name  string
-	Value string
+// Headers maps lowercase field names to separate field-line values in received
+// order for each name. Keys must be lowercase; order across names and original
+// name casing are not retained.
+type Headers map[string][]string
+
+// Values returns matching field-line values in order, comparing names without
+// regard to case. It does not combine or split values. It returns nil if no
+// fields match, including for nil or empty Headers. The returned slice is
+// independent of h.
+func (h Headers) Values(name string) []string {
+	return append([]string(nil), h[strings.ToLower(name)]...)
 }
 
 // processHeaders reads the bounded header section, unfolds continuations, and
-// validates each field's generic syntax with ParseHeaderField. It preserves order
-// and repeated names; it does not validate Host or message framing semantics.
-func processHeaders(reader *bufio.Reader) ([]HeaderField, error) {
-	var headers []HeaderField
+// validates each field's generic syntax with ParseHeaderField. It lowercases names
+// and appends values in order for each name without combining them. It does not
+// validate Host or message framing semantics.
+func processHeaders(reader *bufio.Reader) (Headers, error) {
+	var headers Headers
 	var pending strings.Builder
 	sectionBytes := 0
+	fieldCount := 0
 	for {
 		lineLimit := min(maxHeaderLineBytes, maxHeaderSectionBytes-sectionBytes-2)
 		if lineLimit < 0 {
@@ -73,17 +85,22 @@ func processHeaders(reader *bufio.Reader) ([]HeaderField, error) {
 			continue
 		}
 		if pending.Len() > 0 {
-			field, err := ParseHeaderField(pending.String())
+			name, value, err := ParseHeaderField(pending.String())
 			if err != nil {
 				return nil, err
 			}
-			headers = append(headers, field)
+			if headers == nil {
+				headers = make(Headers)
+			}
+			name = strings.ToLower(name)
+			headers[name] = append(headers[name], value)
+			fieldCount++
 			pending.Reset()
 		}
 		if rawLine == "" {
 			return headers, nil
 		}
-		if len(headers) == maxHeaderFields {
+		if fieldCount == maxHeaderFields {
 			return nil, ErrTooManyHeaders
 		}
 		pending.WriteString(strings.TrimRight(rawLine, " \t"))
@@ -93,19 +110,20 @@ func processHeaders(reader *bufio.Reader) ([]HeaderField, error) {
 // ParseHeaderField parses one field line without CRLF. It preserves name casing
 // and value bytes, removing only surrounding SP/HTAB from the value. It checks
 // generic syntax, not field-specific semantics, and does not enforce size limits.
-func ParseHeaderField(rawLine string) (HeaderField, error) {
+// On error, both returned strings are empty.
+func ParseHeaderField(rawLine string) (name, value string, err error) {
 	parts := strings.SplitN(rawLine, ":", 2)
 	if len(parts) != 2 {
-		return HeaderField{}, errors.New("http1: header field is missing a colon")
+		return "", "", errors.New("http1: header field is missing a colon")
 	}
-	name, value := parts[0], parts[1]
+	name, value = parts[0], parts[1]
 	if !headerNamePattern.MatchString(name) {
-		return HeaderField{}, errors.New("http1: invalid header field name")
+		return "", "", errors.New("http1: invalid header field name")
 	}
 	for _, b := range []byte(value) {
 		if (b < 0x20 && b != '\t') || b == 0x7f {
-			return HeaderField{}, errors.New("http1: invalid header field value")
+			return "", "", errors.New("http1: invalid header field value")
 		}
 	}
-	return HeaderField{Name: name, Value: strings.Trim(value, " \t")}, nil
+	return name, strings.Trim(value, " \t"), nil
 }

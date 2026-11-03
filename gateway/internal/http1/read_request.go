@@ -1,12 +1,18 @@
 package http1
 
-import "bufio"
+import (
+	"bufio"
+
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
+)
 
 // ReadRequest skips leading empty CRLF lines, parses the request-line, and
 // collects headers through the terminating empty line. Obsolete folding is
-// replaced with one SP per continuation before field parsing. Field order,
-// repeated names, and name casing are preserved. Body remains nil; body bytes
-// stay in reader. Host and message framing semantics are not yet validated.
+// replaced with one SP per continuation before field parsing. Header names are
+// stored lowercase, with separate values in order for each name. Body remains
+// nil; body bytes stay in reader. Exactly one Host field is required, with valid
+// URI host/port syntax and an empty value only for authority-less absolute
+// targets. Routing authority selection and message framing remain separate.
 //
 // The request-line and physical header lines allow 8192 content bytes each.
 // Headers allow 32768 bytes including CRLFs, and at most 100 fields. EOF before
@@ -27,6 +33,11 @@ func ReadRequest(reader *bufio.Reader) (*Request, error) {
 
 	// Header stage: read, unfold, and parse the complete header section.
 	request.Headers, err = processHeaders(reader)
+	if err != nil {
+		return nil, err
+	}
+
+	err = fields.ValidateRequestHost(request.Headers.Values("Host"), request.RequestLine.Method, request.RequestLine.RequestTarget)
 	if err != nil {
 		return nil, err
 	}

@@ -52,7 +52,7 @@ type RequestLine struct {
 // nil and body bytes available through the same buffered reader.
 type Request struct {
 	RequestLine RequestLine
-	Headers     []HeaderField
+	Headers     Headers
 	Body        io.ReadCloser
 }
 
