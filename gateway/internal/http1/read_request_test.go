@@ -11,6 +11,7 @@ import (
 	"testing/iotest"
 	"time"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/stretchr/testify/require"
 )
 
@@ -123,6 +124,50 @@ func TestReadRequestValidatesHost(t *testing.T) {
 			remaining, err := io.ReadAll(reader)
 			require.NoError(t, err)
 			require.Equal(t, "body", string(remaining))
+		})
+	}
+}
+
+func TestReadRequestValidatesContentLength(t *testing.T) {
+	tests := []struct {
+		name        string
+		headerLines string
+		wantValues  []string
+		wantErr     error
+	}{
+		{"absent", "", nil, nil},
+		{"zero", "Content-Length: 0\r\n", []string{"0"}, nil},
+		{"positive", "Content-Length: 4\r\n", []string{"4"}, nil},
+		{"mixed case and whitespace", "cOnTeNt-LeNgTh:\t 4 \t\r\n", []string{"4"}, nil},
+		{"leading zeros preserved", "Content-Length: 0004\r\n", []string{"0004"}, nil},
+		{"maximum int64", "Content-Length: 9223372036854775807\r\n", []string{"9223372036854775807"}, nil},
+		{"empty", "Content-Length:\r\n", nil, fields.ErrInvalidContentLength},
+		{"signed", "Content-Length: +4\r\n", nil, fields.ErrInvalidContentLength},
+		{"internal whitespace", "Content-Length: 4 2\r\n", nil, fields.ErrInvalidContentLength},
+		{"folded digits", "Content-Length: 4\r\n 2\r\n", nil, fields.ErrInvalidContentLength},
+		{"identical duplicates", "Content-Length: 4\r\nContent-Length: 4\r\n", nil, fields.ErrInvalidContentLength},
+		{"conflicting mixed case duplicates", "Content-Length: 4\r\nX: value\r\ncOnTeNt-LeNgTh: 5\r\n", nil, fields.ErrInvalidContentLength},
+		{"identical comma list", "Content-Length: 4, 4\r\n", nil, fields.ErrInvalidContentLength},
+		{"conflicting comma list", "Content-Length: 4, 5\r\n", nil, fields.ErrInvalidContentLength},
+		{"overflow", "Content-Length: 9223372036854775808\r\n", nil, fields.ErrInvalidContentLength},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			const remainder = "body\x00bytes\r\n"
+			raw := "POST / HTTP/1.1\r\nHost: example.com\r\n" + test.headerLines + "\r\n" + remainder
+			reader := bufio.NewReader(iotest.OneByteReader(strings.NewReader(raw)))
+			request, err := ReadRequest(reader)
+			if test.wantErr != nil {
+				require.ErrorIs(t, err, test.wantErr)
+				require.Nil(t, request)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.wantValues, request.Headers.Values("Content-Length"))
+				require.Nil(t, request.Body)
+			}
+			remaining, err := io.ReadAll(reader)
+			require.NoError(t, err)
+			require.Equal(t, remainder, string(remaining))
 		})
 	}
 }

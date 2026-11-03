@@ -1,10 +1,6 @@
 package http1
 
-import (
-	"bufio"
-
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
-)
+import "bufio"
 
 // ReadRequest skips leading empty CRLF lines, parses the request-line, and
 // collects headers through the terminating empty line. Obsolete folding is
@@ -37,7 +33,7 @@ func ReadRequest(reader *bufio.Reader) (*Request, error) {
 		return nil, err
 	}
 
-	err = fields.ValidateRequestHost(request.Headers.Values("Host"), request.RequestLine.Method, request.RequestLine.RequestTarget)
+	err = validateRequestHeaders(&request)
 	if err != nil {
 		return nil, err
 	}
