@@ -1,6 +1,7 @@
 package http1
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -9,6 +10,17 @@ import (
 	"regexp"
 	"strings"
 )
+
+// maxRequestLineBytes caps content read by ReadRequest at 8 KiB, excluding
+// CRLF, to bound buffering before parsing. This is a local
+// implementation limit: RFC 9112, Section 3 recommends supporting at least
+// 8000 octets but defines no universal maximum.
+// https://datatracker.ietf.org/doc/html/rfc9112#section-3
+const maxRequestLineBytes = 8 * 1024
+
+// ErrRequestLineTooLong is returned by ReadRequest when request-line content
+// exceeds 8192 bytes, excluding its terminating CRLF.
+var ErrRequestLineTooLong = errors.New("http1: request line exceeds 8192 bytes")
 
 // Patterns are compiled once. The \A and \z anchors require a whole-input match.
 var (
@@ -36,12 +48,32 @@ type RequestLine struct {
 }
 
 // Request holds an HTTP/1.x request-line, header fields, and an optional body
-// stream. ReadRequest currently populates only RequestLine, leaving Headers
-// and Body nil and their bytes unread in the buffered reader.
+// stream. ReadRequest currently populates RequestLine and Headers, leaving Body
+// nil and body bytes available through the same buffered reader.
 type Request struct {
 	RequestLine RequestLine
 	Headers     []HeaderField
 	Body        io.ReadCloser
+}
+
+// processRequestLine skips leading empty CRLF lines, reads a bounded request-line,
+// and calls ParseRequestLine to validate and parse its method, target, and version.
+// Oversized lines return ErrRequestLineTooLong. Read errors are wrapped;
+// parsing errors are returned unchanged.
+func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
+	for {
+		rawLine, err := readCRLFLine(reader, maxRequestLineBytes)
+		if errors.Is(err, errLineTooLong) {
+			return RequestLine{}, ErrRequestLineTooLong
+		}
+		if err != nil {
+			return RequestLine{}, fmt.Errorf("http1: reading request line: %w", err)
+		}
+		if rawLine == "" {
+			continue
+		}
+		return ParseRequestLine(rawLine)
+	}
 }
 
 // ParseRequestLine parses line contents without a CRLF terminator. It requires

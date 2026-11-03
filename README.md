@@ -3,6 +3,13 @@
 A Go–Rust project combining a handwritten Go HTTP/1.1 gateway, a Rust application
 server with bounded in-memory text search, and a Rust/Ratatui client.
 
+## Protocol references
+
+The handwritten Go HTTP/1.1 implementation is being built against these specifications:
+
+- [RFC 9110: HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110.html) - methods, status codes, field meanings, and shared HTTP rules.
+- [RFC 9112: HTTP/1.1](https://www.rfc-editor.org/rfc/rfc9112.html) - message syntax, parsing, framing, and connection management.
+
 ## Current scaffold
 
 - The existing Go request-line parser, streaming line reader, executable and
