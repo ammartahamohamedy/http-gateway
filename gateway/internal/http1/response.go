@@ -1,6 +1,10 @@
 package http1
 
-import "io"
+import (
+	"io"
+
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
+)
 
 // StatusLine contains the HTTP version number, numeric status code, and
 // optional reason phrase from a response's start-line.
@@ -15,6 +19,6 @@ type StatusLine struct {
 // stream. The type itself does not parse or validate these fields.
 type Response struct {
 	StatusLine StatusLine
-	Headers    Headers
+	Headers    header.Section
 	Body       io.ReadCloser
 }

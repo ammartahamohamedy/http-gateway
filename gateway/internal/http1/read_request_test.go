@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 	"github.com/stretchr/testify/require"
 )
 
@@ -24,10 +25,10 @@ func TestReadRequestSizeLimit(t *testing.T) {
 	require.NoError(t, err)
 	parsed, err := ReadRequest(bufio.NewReader(strings.NewReader(rawLine + "\r\nHost: example.com\r\n\r\n")))
 	require.NoError(t, err)
-	require.Equal(t, &Request{RequestLine: line, Headers: Headers{"host": {"example.com"}}}, parsed)
+	require.Equal(t, &Request{RequestLine: line, Headers: header.Section{"host": {"example.com"}}, Fields: RequestFields{Authority: "example.com"}}, parsed)
 	parsed, err = ReadRequest(bufio.NewReaderSize(strings.NewReader(rawLine+"\r\nHost: example.com\r\n\r\n"), maxRequestLineBytes+1))
 	require.NoError(t, err)
-	require.Equal(t, &Request{RequestLine: line, Headers: Headers{"host": {"example.com"}}}, parsed)
+	require.Equal(t, &Request{RequestLine: line, Headers: header.Section{"host": {"example.com"}}, Fields: RequestFields{Authority: "example.com"}}, parsed)
 	_, err = ReadRequest(bufio.NewReader(strings.NewReader(rawLine + "\r")))
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 
@@ -54,7 +55,8 @@ func TestReadRequest(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, &Request{
 				RequestLine: RequestLine{Method: "GET", RequestTarget: "/", Version: "1.1"},
-				Headers:     Headers{"host": {"example.com"}},
+				Headers:     header.Section{"host": {"example.com"}},
+				Fields:      RequestFields{Authority: "example.com"},
 			}, request)
 		})
 	}
@@ -65,7 +67,7 @@ func TestReadRequestPreservesRemainingBytes(t *testing.T) {
 	reader := bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n" + remainder))
 	request, err := ReadRequest(reader)
 	require.NoError(t, err)
-	require.Equal(t, Headers{"host": {"example.com"}}, request.Headers)
+	require.Equal(t, header.Section{"host": {"example.com"}}, request.Headers)
 	require.Equal(t, []string{"example.com"}, request.Headers.Values("HOST"))
 	require.Nil(t, request.Body)
 	remaining, err := io.ReadAll(reader)
@@ -89,22 +91,22 @@ func TestReadRequestValidatesHost(t *testing.T) {
 		{"CONNECT target", "CONNECT example.com:443 HTTP/1.1", "Host: example.com:443", "example.com:443", nil},
 		{"authority-less absolute target", "GET urn:example:item HTTP/1.1", "Host:", "", nil},
 		{"absolute authority takes precedence later", "GET http://target.example/ HTTP/1.1", "Host: other.example", "other.example", nil},
-		{"missing", "GET / HTTP/1.1", "", "", ErrInvalidHost},
-		{"empty origin host", "GET / HTTP/1.1", "Host:", "", ErrInvalidHost},
-		{"whitespace-only origin host", "GET / HTTP/1.1", "Host: \t", "", ErrInvalidHost},
-		{"empty absolute HTTP host", "GET http://example.com/ HTTP/1.1", "Host:", "", ErrInvalidHost},
-		{"empty asterisk host", "OPTIONS * HTTP/1.1", "Host:", "", ErrInvalidHost},
-		{"empty CONNECT host", "CONNECT example.com:443 HTTP/1.1", "Host:", "", ErrInvalidHost},
-		{"port without host", "GET / HTTP/1.1", "Host: :80", "", ErrInvalidHost},
-		{"identical duplicates", "GET / HTTP/1.1", "Host: example.com\r\nHost: example.com", "", ErrInvalidHost},
-		{"mixed case duplicates", "GET / HTTP/1.1", "Host: example.com\r\nX: value\r\nhOsT: other.example", "", ErrInvalidHost},
-		{"comma and space", "GET / HTTP/1.1", "Host: example.com, other.example", "", ErrInvalidHost},
-		{"userinfo", "GET / HTTP/1.1", "Host: user@example.com", "", ErrInvalidHost},
-		{"URI instead of authority", "GET / HTTP/1.1", "Host: http://example.com", "", ErrInvalidHost},
-		{"invalid port", "GET / HTTP/1.1", "Host: example.com:http", "", ErrInvalidHost},
-		{"unbracketed IPv6", "GET / HTTP/1.1", "Host: 2001:db8::1", "", ErrInvalidHost},
-		{"malformed IPv6", "GET / HTTP/1.1", "Host: [2001:db8::g]", "", ErrInvalidHost},
-		{"fold inside authority", "GET / HTTP/1.1", "Host: example.\r\n com", "", ErrInvalidHost},
+		{"missing", "GET / HTTP/1.1", "", "", fields.ErrInvalidHost},
+		{"empty origin host", "GET / HTTP/1.1", "Host:", "", fields.ErrInvalidHost},
+		{"whitespace-only origin host", "GET / HTTP/1.1", "Host: \t", "", fields.ErrInvalidHost},
+		{"empty absolute HTTP host", "GET http://example.com/ HTTP/1.1", "Host:", "", fields.ErrInvalidHost},
+		{"empty asterisk host", "OPTIONS * HTTP/1.1", "Host:", "", fields.ErrInvalidHost},
+		{"empty CONNECT host", "CONNECT example.com:443 HTTP/1.1", "Host:", "", fields.ErrInvalidHost},
+		{"port without host", "GET / HTTP/1.1", "Host: :80", "", fields.ErrInvalidHost},
+		{"identical duplicates", "GET / HTTP/1.1", "Host: example.com\r\nHost: example.com", "", fields.ErrInvalidHost},
+		{"mixed case duplicates", "GET / HTTP/1.1", "Host: example.com\r\nX: value\r\nhOsT: other.example", "", fields.ErrInvalidHost},
+		{"comma and space", "GET / HTTP/1.1", "Host: example.com, other.example", "", fields.ErrInvalidHost},
+		{"userinfo", "GET / HTTP/1.1", "Host: user@example.com", "", fields.ErrInvalidHost},
+		{"URI instead of authority", "GET / HTTP/1.1", "Host: http://example.com", "", fields.ErrInvalidHost},
+		{"invalid port", "GET / HTTP/1.1", "Host: example.com:http", "", fields.ErrInvalidHost},
+		{"unbracketed IPv6", "GET / HTTP/1.1", "Host: 2001:db8::1", "", fields.ErrInvalidHost},
+		{"malformed IPv6", "GET / HTTP/1.1", "Host: [2001:db8::g]", "", fields.ErrInvalidHost},
+		{"fold inside authority", "GET / HTTP/1.1", "Host: example.\r\n com", "", fields.ErrInvalidHost},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -208,8 +210,8 @@ func TestReadRequestErrors(t *testing.T) {
 		{"read failure", iotest.ErrReader(readErr), readErr},
 		{"read failure after bytes", io.MultiReader(strings.NewReader("GET /"), iotest.ErrReader(readErr)), readErr},
 		{"read failure in headers", io.MultiReader(strings.NewReader("GET / HTTP/1.1\r\nX: value\r\n"), iotest.ErrReader(readErr)), readErr},
-		{"header line limit", strings.NewReader("GET / HTTP/1.1\r\nX:" + strings.Repeat("a", maxHeaderLineBytes) + "\r\n"), ErrHeaderLineTooLong},
-		{"header count limit", strings.NewReader("GET / HTTP/1.1\r\n" + strings.Repeat("X: a\r\n", maxHeaderFields+1) + "\r\n"), ErrTooManyHeaders},
+		{"header line limit", strings.NewReader("GET / HTTP/1.1\r\nX:" + strings.Repeat("a", requestHeaderLimits.LineBytes) + "\r\n"), header.ErrLineTooLong},
+		{"header count limit", strings.NewReader("GET / HTTP/1.1\r\n" + strings.Repeat("X: a\r\n", requestHeaderLimits.Fields+1) + "\r\n"), header.ErrTooManyFields},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -249,7 +251,7 @@ func TestReadRequestBeforeConnectionCloses(t *testing.T) {
 	case got := <-parsed:
 		require.NoError(t, got.err)
 		require.Equal(t, "/live", got.request.RequestLine.RequestTarget)
-		require.Equal(t, Headers{"host": {"example.com"}}, got.request.Headers)
+		require.Equal(t, header.Section{"host": {"example.com"}}, got.request.Headers)
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "parser waited for connection EOF after complete headers")
 	}
@@ -268,7 +270,7 @@ func TestReadRequestHeadersAndUnfolding(t *testing.T) {
 		"X-Bytes: \x80\xff\xc3\r\n" +
 		"Set-Cookie: a=1; Expires=Wed, 09 Jun 2027 10:18:14 GMT\r\n" +
 		"X-Test: last\r\nset-cookie: b=2\r\n\r\nbody"
-	want := Headers{
+	want := header.Section{
 		"x-test":     {"first second  \tpart third:fourth", "\"a,b\"", "last"},
 		"host":       {"example.com"},
 		"x-empty":    {""},
@@ -303,7 +305,7 @@ func TestReadRequestHeaderFragmentation(t *testing.T) {
 			reader := bufio.NewReaderSize(source, 16)
 			request, err := ReadRequest(reader)
 			require.NoError(t, err)
-			require.Equal(t, Headers{"x": {"first second"}, "y": {"last"}, "host": {"example.com"}}, request.Headers)
+			require.Equal(t, header.Section{"x": {"first second"}, "y": {"last"}, "host": {"example.com"}}, request.Headers)
 			body, err := io.ReadAll(reader)
 			require.NoError(t, err)
 			require.Equal(t, "body", string(body))
@@ -329,51 +331,6 @@ func TestReadRequestRejectsMalformedHeaders(t *testing.T) {
 			request, err := ReadRequest(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\n" + section)))
 			require.Error(t, err)
 			require.Nil(t, request)
-		})
-	}
-}
-
-func TestProcessHeadersLimits(t *testing.T) {
-	fieldLine := func(size int) string { return "X: " + strings.Repeat("a", size-3) }
-	prefix := strings.Repeat(fieldLine(maxHeaderLineBytes)+"\r\n", 3)
-	lastLineSize := maxHeaderSectionBytes - len(prefix) - 4
-	exactSection := prefix + fieldLine(lastLineSize) + "\r\n\r\n"
-	require.Len(t, exactSection, maxHeaderSectionBytes)
-	tests := []struct {
-		name    string
-		section string
-		count   int
-		wantErr error
-	}{
-		{"line at limit", fieldLine(maxHeaderLineBytes) + "\r\n\r\n", 1, nil},
-		{"line over limit", fieldLine(maxHeaderLineBytes+1) + "\r\n\r\n", 0, ErrHeaderLineTooLong},
-		{"oversized unterminated line", fieldLine(maxHeaderLineBytes + 1), 0, ErrHeaderLineTooLong},
-		{"oversized partial terminator", fieldLine(maxHeaderLineBytes+1) + "\r", 0, ErrHeaderLineTooLong},
-		{"section at limit", exactSection, 4, nil},
-		{"section over limit", prefix + fieldLine(lastLineSize+1) + "\r\n\r\n", 0, ErrHeadersTooLarge},
-		{"section budget while reading", prefix + fieldLine(lastLineSize+3), 0, ErrHeadersTooLarge},
-		{"count at limit", strings.Repeat("X: a\r\n", maxHeaderFields) + "\r\n", maxHeaderFields, nil},
-		{"count over limit", strings.Repeat("X: a\r\n", maxHeaderFields+1) + "\r\n", 0, ErrTooManyHeaders},
-		{"mixed case count over limit", strings.Repeat("X: a\r\nx: b\r\n", maxHeaderFields/2) + "X: c\r\n\r\n", 0, ErrTooManyHeaders},
-		{"continuations are not fields", "X: a\r\n" + strings.Repeat(" b\r\n", maxHeaderFields+1) + "\r\n", 1, nil},
-		{"large unfolded field", fieldLine(maxHeaderLineBytes) + "\r\n " + strings.Repeat("b", maxHeaderLineBytes-1) + "\r\n\r\n", 1, nil},
-		{"oversized continuation", "X: a\r\n " + strings.Repeat("b", maxHeaderLineBytes) + "\r\n\r\n", 0, ErrHeaderLineTooLong},
-		{"continuations use section budget", "X: a\r\n" + strings.Repeat(" \t\r\n", maxHeaderSectionBytes/4), 0, ErrHeadersTooLarge},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			headers, err := processHeaders(bufio.NewReaderSize(strings.NewReader(test.section), 16))
-			if test.wantErr != nil {
-				require.ErrorIs(t, err, test.wantErr)
-				require.Nil(t, headers)
-				return
-			}
-			require.NoError(t, err)
-			count := 0
-			for _, values := range headers {
-				count += len(values)
-			}
-			require.Equal(t, test.count, count)
 		})
 	}
 }

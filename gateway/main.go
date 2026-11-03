@@ -1,13 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"flag"
 	"fmt"
 	"log"
 	"net"
 
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/proxy"
 )
 
 func main() {
@@ -34,28 +33,8 @@ func main() {
 
 		fmt.Println("Connection accepted")
 
-		handleConnection(connection)
+		proxy.HandleConnection(connection)
 
 		fmt.Println("Connection closed")
 	}
-}
-
-// handleConnection reads one request-line and prints its fields if valid.
-// It attempts to close the connection before returning. Read, validation, and
-// close errors are logged without terminating the listener.
-func handleConnection(connection net.Conn) {
-	defer func() {
-		if err := connection.Close(); err != nil {
-			log.Printf("closing connection: %v", err)
-		}
-	}()
-
-	reader := bufio.NewReader(connection)
-	request, err := http1.ReadRequest(reader)
-	if err != nil {
-		log.Printf("reading request: %v", err)
-		return
-	}
-	fmt.Printf("Method: %s\nRequest target: %s\nVersion: %s\n",
-		request.RequestLine.Method, request.RequestLine.RequestTarget, request.RequestLine.Version)
 }

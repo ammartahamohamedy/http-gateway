@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
-	"net/url"
-	"regexp"
 	"strings"
+
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/lineio"
 )
 
 // maxRequestLineBytes caps content read by ReadRequest at 8 KiB, excluding
@@ -18,25 +19,17 @@ import (
 // https://datatracker.ietf.org/doc/html/rfc9112#section-3
 const maxRequestLineBytes = 8 * 1024
 
+// requestHeaderLimits are local limits for a request header section: 8 KiB per
+// physical line, 32 KiB in total including CRLFs, and at most 100 fields.
+var requestHeaderLimits = header.Limits{
+	LineBytes:    8 * 1024,
+	SectionBytes: 32 * 1024,
+	Fields:       100,
+}
+
 // ErrRequestLineTooLong is returned by ReadRequest when request-line content
 // exceeds 8192 bytes, excluding its terminating CRLF.
 var ErrRequestLineTooLong = errors.New("http1: request line exceeds 8192 bytes")
-
-// Patterns are compiled once. The \A and \z anchors require a whole-input match.
-var (
-	// methodPattern matches a nonempty HTTP token: ASCII letters, digits, and
-	// the punctuation permitted by the RFC's tchar grammar.
-	methodPattern = regexp.MustCompile("\\A[A-Za-z0-9!#$%&'*+.^_`|~-]+\\z")
-
-	// requestTargetPattern accepts ASCII URI characters and complete %HH escapes,
-	// rejecting whitespace, controls, fragments, and malformed escapes anywhere
-	// in the target. URI structure is checked separately; escapes are not decoded.
-	requestTargetPattern = regexp.MustCompile(`\A(?:[A-Za-z0-9._~:/?\[\]@!$&'()*+,;=-]|%[0-9A-Fa-f]{2})+\z`)
-
-	// portPattern matches one or more ASCII decimal digits, excluding signs
-	// and service names. It checks numeric syntax, not the port's value range.
-	portPattern = regexp.MustCompile(`\A[0-9]+\z`)
-)
 
 // RequestLine contains the method, request-target, and HTTP version number
 // from a request's start-line, excluding its CRLF terminator.
@@ -47,12 +40,14 @@ type RequestLine struct {
 	Version string
 }
 
-// Request holds an HTTP/1.x request-line, header fields, and an optional body
-// stream. ReadRequest currently populates RequestLine and Headers, leaving Body
-// nil and body bytes available through the same buffered reader.
+// Request holds an HTTP/1.x request-line, header fields, parsed metadata from
+// the supported fields, and an optional body stream. ReadRequest currently
+// populates RequestLine, Headers, and Fields, leaving Body nil and body bytes
+// available through the same buffered reader.
 type Request struct {
 	RequestLine RequestLine
-	Headers     Headers
+	Headers     header.Section
+	Fields      RequestFields
 	Body        io.ReadCloser
 }
 
@@ -62,8 +57,8 @@ type Request struct {
 // parsing errors are returned unchanged.
 func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
 	for {
-		rawLine, err := readCRLFLine(reader, maxRequestLineBytes)
-		if errors.Is(err, errLineTooLong) {
+		rawLine, err := lineio.ReadCRLFLine(reader, maxRequestLineBytes)
+		if errors.Is(err, lineio.ErrLineTooLong) {
 			return RequestLine{}, ErrRequestLineTooLong
 		}
 		if err != nil {
@@ -99,7 +94,7 @@ func ParseRequestLine(rawLine string) (RequestLine, error) {
 		)
 	}
 
-	if !methodPattern.MatchString(method) {
+	if !grammar.IsToken(method) {
 		return RequestLine{}, fmt.Errorf("http1: invalid method %q", method)
 	}
 	if err := validateRequestTarget(method, requestTarget); err != nil {
@@ -115,49 +110,4 @@ func ParseRequestLine(rawLine string) (RequestLine, error) {
 		RequestTarget: requestTarget,
 		Version:       versionNumber,
 	}, nil
-}
-
-// validateRequestTarget checks the character repertoire, percent escapes, and
-// basic URI structure, including method-specific target forms. CONNECT requires
-// a nonempty host and decimal port; asterisk-form is permitted only for OPTIONS.
-// Absolute HTTP(S) URIs must include a host and exclude userinfo. The original
-// target is preserved, including percent-escape encoding. This function does not
-// resolve hosts or check port ranges.
-func validateRequestTarget(method, requestTarget string) error {
-	if !requestTargetPattern.MatchString(requestTarget) {
-		return fmt.Errorf("http1: invalid request-target %q", requestTarget)
-	}
-
-	if method == "CONNECT" {
-		host, port, err := net.SplitHostPort(requestTarget)
-		if err != nil || host == "" || port == "" {
-			return errors.New("http1: CONNECT requires a host and numeric port")
-		}
-		if !portPattern.MatchString(port) {
-			return errors.New("http1: CONNECT requires a numeric port")
-		}
-		authority, err := url.Parse("http://" + requestTarget)
-		if err != nil || authority.Host != requestTarget {
-			return errors.New("http1: invalid CONNECT authority")
-		}
-		return nil
-	}
-
-	if requestTarget == "*" {
-		if method != "OPTIONS" {
-			return errors.New("http1: asterisk-form requires OPTIONS")
-		}
-		return nil
-	}
-
-	target, err := url.ParseRequestURI(requestTarget)
-	if err != nil {
-		return fmt.Errorf("http1: invalid request-target: %w", err)
-	}
-	if strings.EqualFold(target.Scheme, "http") || strings.EqualFold(target.Scheme, "https") {
-		if target.Host == "" || target.User != nil {
-			return errors.New("http1: HTTP URI requires a host and must not include userinfo")
-		}
-	}
-	return nil
 }

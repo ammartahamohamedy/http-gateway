@@ -69,3 +69,29 @@ func TestValidateHostValue(t *testing.T) {
 		})
 	}
 }
+
+func TestRequestAuthority(t *testing.T) {
+	tests := []struct {
+		name          string
+		host          string
+		method        string
+		requestTarget string
+		want          string
+	}{
+		{"origin uses Host", "example.com:8080", "GET", "/a?b", "example.com:8080"},
+		{"asterisk uses Host", "example.com", "OPTIONS", "*", "example.com"},
+		{"CONNECT uses target", "other.example:443", "CONNECT", "example.com:443", "example.com:443"},
+		{"absolute overrides Host", "other.example", "GET", "http://target.example:8080/a?b", "target.example:8080"},
+		{"absolute without path", "other.example", "GET", "https://target.example?q", "target.example"},
+		{"absolute escapes preserved", "other.example", "GET", "http://%C3%A9xample.example/", "%C3%A9xample.example"},
+		{"absolute IPv6", "other.example", "GET", "http://[::1]:80/", "[::1]:80"},
+		{"scheme case", "other.example", "GET", "HTTP://Target.Example/", "Target.Example"},
+		{"authority-less absolute", "", "GET", "urn:example:item", ""},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			require.NoError(t, ValidateRequestHost([]string{test.host}, test.method, test.requestTarget))
+			require.Equal(t, test.want, RequestAuthority(test.host, test.method, test.requestTarget))
+		})
+	}
+}

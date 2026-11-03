@@ -1,4 +1,4 @@
-package http1
+package lineio
 
 import (
 	"bufio"
@@ -27,7 +27,7 @@ func TestReadCRLFLine(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			line, err := readCRLFLine(bufio.NewReaderSize(test.reader, 16), 64)
+			line, err := ReadCRLFLine(bufio.NewReaderSize(test.reader, 16), 64)
 			require.NoError(t, err)
 			require.Equal(t, test.want, line)
 		})
@@ -38,15 +38,15 @@ func TestReadCRLFLinePreservesMessageBoundaries(t *testing.T) {
 	body := "body\r\nbytes\n\x00\xff"
 	reader := bufio.NewReader(strings.NewReader("first\r\n\r\nlast\r\n" + body))
 
-	line, err := readCRLFLine(reader, 5)
+	line, err := ReadCRLFLine(reader, 5)
 	require.NoError(t, err)
 	require.Equal(t, "first", line)
 
-	line, err = readCRLFLine(reader, 0)
+	line, err = ReadCRLFLine(reader, 0)
 	require.NoError(t, err)
 	require.Empty(t, line, "an empty line must be returned, not skipped")
 
-	line, err = readCRLFLine(reader, 4)
+	line, err = ReadCRLFLine(reader, 4)
 	require.NoError(t, err)
 	require.Equal(t, "last", line)
 
@@ -64,16 +64,16 @@ func TestReadCRLFLineLimits(t *testing.T) {
 		wantErr error
 	}{
 		{"zero limit empty line", "\r\n", 0, "", nil},
-		{"zero limit nonempty line", "a\r\n", 0, "", errLineTooLong},
+		{"zero limit nonempty line", "a\r\n", 0, "", ErrLineTooLong},
 		{"content exactly at limit", "abc\r\n", 3, "abc", nil},
-		{"content exceeds limit", "abcd\r\n", 3, "", errLineTooLong},
-		{"oversized without terminator", "abcd", 3, "", errLineTooLong},
+		{"content exceeds limit", "abcd\r\n", 3, "", ErrLineTooLong},
+		{"oversized without terminator", "abcd", 3, "", ErrLineTooLong},
 		{"partial terminator at limit", "abc\r", 3, "", io.ErrUnexpectedEOF},
-		{"oversized with partial terminator", "abcd\r", 3, "", errLineTooLong},
+		{"oversized with partial terminator", "abcd\r", 3, "", ErrLineTooLong},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			line, err := readCRLFLine(bufio.NewReader(strings.NewReader(test.input)), test.limit)
+			line, err := ReadCRLFLine(bufio.NewReader(strings.NewReader(test.input)), test.limit)
 			if test.wantErr != nil {
 				require.ErrorIs(t, err, test.wantErr)
 				return
@@ -85,7 +85,7 @@ func TestReadCRLFLineLimits(t *testing.T) {
 
 	content := strings.Repeat("a", 32)
 	reader := bufio.NewReaderSize(strings.NewReader(content+"\r\n"), len(content)+1)
-	line, err := readCRLFLine(reader, len(content))
+	line, err := ReadCRLFLine(reader, len(content))
 	require.NoError(t, err)
 	require.Equal(t, content, line, "a split CRLF must not use the content budget")
 }
@@ -101,16 +101,16 @@ func TestReadCRLFLineErrors(t *testing.T) {
 		{"unterminated content", strings.NewReader("value"), io.ErrUnexpectedEOF},
 		{"CR only", strings.NewReader("\r"), io.ErrUnexpectedEOF},
 		{"partial CRLF", strings.NewReader("value\r"), io.ErrUnexpectedEOF},
-		{"bare LF", strings.NewReader("value\n"), errInvalidLineEnding},
-		{"empty bare LF", strings.NewReader("\n"), errInvalidLineEnding},
-		{"embedded CR", strings.NewReader("bad\rvalue\r\n"), errInvalidLineEnding},
-		{"extra CR", strings.NewReader("value\r\r\n"), errInvalidLineEnding},
+		{"bare LF", strings.NewReader("value\n"), ErrInvalidLineEnding},
+		{"empty bare LF", strings.NewReader("\n"), ErrInvalidLineEnding},
+		{"embedded CR", strings.NewReader("bad\rvalue\r\n"), ErrInvalidLineEnding},
+		{"extra CR", strings.NewReader("value\r\r\n"), ErrInvalidLineEnding},
 		{"read failure", iotest.ErrReader(readErr), readErr},
 		{"partial data and read failure", iotest.DataErrReader(io.MultiReader(strings.NewReader("value"), iotest.ErrReader(readErr))), readErr},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := readCRLFLine(bufio.NewReader(test.reader), 64)
+			_, err := ReadCRLFLine(bufio.NewReader(test.reader), 64)
 			require.ErrorIs(t, err, test.want)
 		})
 	}
@@ -121,9 +121,9 @@ func TestReadCRLFLinePreservesErrorAfterCompleteLine(t *testing.T) {
 	source := iotest.DataErrReader(io.MultiReader(strings.NewReader("ok\r\n"), iotest.ErrReader(readErr)))
 	reader := bufio.NewReader(source)
 
-	line, err := readCRLFLine(reader, 2)
+	line, err := ReadCRLFLine(reader, 2)
 	require.NoError(t, err)
 	require.Equal(t, "ok", line)
-	_, err = readCRLFLine(reader, 2)
+	_, err = ReadCRLFLine(reader, 2)
 	require.ErrorIs(t, err, readErr)
 }

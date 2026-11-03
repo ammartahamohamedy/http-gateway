@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"net/url"
 	"regexp"
+	"strings"
 )
 
 // ErrInvalidHost reports a missing, repeated, or invalid request Host field.
@@ -42,6 +43,38 @@ func ValidateRequestHost(values []string, method, requestTarget string) error {
 		}
 	}
 	return nil
+}
+
+// RequestAuthority returns the request's effective authority after
+// ValidateRequestHost succeeds for the same arguments. CONNECT uses its
+// authority-form target, and an absolute-form target with an authority overrides
+// Host (RFC 9112, Sections 3.2.2-3.2.3). Otherwise it returns hostValue, which
+// is empty for an authority-less absolute target. The result is preserved as
+// received; it identifies the requested authority, not the backend destination.
+func RequestAuthority(hostValue, method, requestTarget string) string {
+	if method == "CONNECT" {
+		return requestTarget
+	}
+	if requestTarget == "*" || strings.HasPrefix(requestTarget, "/") {
+		return hostValue
+	}
+	// Slice the raw authority rather than using url.URL.Host, which decodes
+	// percent escapes in reg-name hosts.
+	_, rest, _ := strings.Cut(requestTarget, ":")
+	authority, found := strings.CutPrefix(rest, "//")
+	if !found {
+		return hostValue
+	}
+	if end := strings.IndexAny(authority, "/?"); end >= 0 {
+		authority = authority[:end]
+	}
+	if at := strings.LastIndexByte(authority, '@'); at >= 0 {
+		authority = authority[at+1:]
+	}
+	if authority == "" {
+		return hostValue
+	}
+	return authority
 }
 
 // validateHostValue checks Host's URI syntax without resolving names, decoding
