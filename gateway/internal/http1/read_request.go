@@ -34,7 +34,7 @@ func ReadRequest(reader *bufio.Reader) (*Request, error) {
 	}
 
 	// Header stage: read, unfold, and parse the complete header section.
-	request.Headers, err = header.ReadSection(reader, requestHeaderLimits)
+	request.Headers, err = header.ReadHeadersSection(reader, requestHeaderLimits)
 	if err != nil {
 		return nil, err
 	}

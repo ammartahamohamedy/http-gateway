@@ -26,7 +26,7 @@ func HandleConnection(connection net.Conn) {
 		log.Printf("reading request: %v", err)
 		return
 	}
-	if err := CheckRequestTarget(request); err != nil {
+	if err := checkRequestTarget(request); err != nil {
 		log.Printf("rejecting request: %v", err)
 		return
 	}

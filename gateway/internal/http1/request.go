@@ -46,13 +46,13 @@ type RequestLine struct {
 // available through the same buffered reader.
 type Request struct {
 	RequestLine RequestLine
-	Headers     header.Section
+	Headers     header.Headers
 	Fields      RequestFields
 	Body        io.ReadCloser
 }
 
 // processRequestLine skips leading empty CRLF lines, reads a bounded request-line,
-// and calls ParseRequestLine to validate and parse its method, target, and version.
+// and calls parseRequestLine to validate and parse its method, target, and version.
 // Oversized lines return ErrRequestLineTooLong. Read errors are wrapped;
 // parsing errors are returned unchanged.
 func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
@@ -67,18 +67,18 @@ func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
 		if rawLine == "" {
 			continue
 		}
-		return ParseRequestLine(rawLine)
+		return parseRequestLine(rawLine)
 	}
 }
 
-// ParseRequestLine parses line contents without a CRLF terminator. It requires
+// parseRequestLine parses line contents without a CRLF terminator. It requires
 // exactly three nonempty components separated by single spaces and supports
 // HTTP/1.1. Method case and request-target encoding are preserved, and Version
 // contains the version number "1.1". It does not check whether a method is
 // implemented by the server. This function does not enforce a size limit;
 // ReadRequest applies the input limit before calling it. Direct callers
 // are responsible for bounding input when a size limit is required.
-func ParseRequestLine(rawLine string) (RequestLine, error) {
+func parseRequestLine(rawLine string) (RequestLine, error) {
 	parts := strings.Split(rawLine, " ")
 	if len(parts) != 3 {
 		return RequestLine{}, errors.New(

@@ -18,11 +18,11 @@ func TestRequestFieldRulesOrder(t *testing.T) {
 	for _, rule := range requestFieldRules {
 		names = append(names, rule.name)
 	}
-	require.Equal(t, []string{"Host", "Content-Length"}, names)
+	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding"}, names)
 }
 
 func TestProcessRequestFieldsFirstErrorIsDeterministic(t *testing.T) {
-	headers := header.Section{"host": {"a", "b"}, "content-length": {"x"}}
+	headers := header.Headers{"host": {"a", "b"}, "content-length": {"x"}}
 	for range 20 {
 		_, err := processRequestFields(originLine, headers)
 		var fieldErr *FieldError
@@ -32,7 +32,7 @@ func TestProcessRequestFieldsFirstErrorIsDeterministic(t *testing.T) {
 }
 
 func TestFieldErrorWrapping(t *testing.T) {
-	_, err := processRequestFields(originLine, header.Section{"host": {"example.com"}, "content-length": {"-1"}})
+	_, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"-1"}})
 	require.ErrorIs(t, err, fields.ErrInvalidContentLength)
 	var fieldErr *FieldError
 	require.ErrorAs(t, err, &fieldErr)
@@ -63,6 +63,8 @@ func TestReadRequestFields(t *testing.T) {
 			RequestFields{Authority: "example.com:443"}},
 		{"authority-less absolute", "GET urn:example:item HTTP/1.1\r\nHost:\r\n\r\n",
 			RequestFields{}},
+		{"transfer codings", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: GZIP\r\nTransfer-Encoding: Chunked\r\n\r\n",
+			RequestFields{Authority: "example.com", TransferCodings: []string{"gzip", "chunked"}}},
 		{"unknown valid fields accepted", "GET / HTTP/1.1\r\nHost: example.com\r\nX-Unfamiliar: \"a,b\"\r\nX-Unfamiliar: c\r\n\r\n",
 			RequestFields{Authority: "example.com"}},
 	}
@@ -77,7 +79,7 @@ func TestReadRequestFields(t *testing.T) {
 
 func TestProcessRequestFieldsReturnsZeroOnFailure(t *testing.T) {
 	// Host succeeds and assigns Authority before Content-Length fails.
-	parsed, err := processRequestFields(originLine, header.Section{"host": {"example.com"}, "content-length": {"1, 1"}})
+	parsed, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"1, 1"}})
 	require.Error(t, err)
 	require.Zero(t, parsed)
 }
@@ -90,21 +92,66 @@ func TestRequestCrossChecksRunAfterFieldRules(t *testing.T) {
 	var seen []RequestFields
 	requestCrossChecks = []requestCrossCheck{{
 		name: "Content-Length",
-		apply: func(_ RequestLine, _ header.Section, parsed RequestFields) error {
+		apply: func(_ RequestLine, _ header.Headers, parsed RequestFields) error {
 			seen = append(seen, parsed)
 			return checkErr
 		},
 	}}
 
-	_, err := processRequestFields(originLine, header.Section{"host": {"example.com"}, "content-length": {"x"}})
+	_, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"x"}})
 	require.ErrorIs(t, err, fields.ErrInvalidContentLength)
 	require.Empty(t, seen, "cross-checks must not run after a field rule fails")
 
-	parsed, err := processRequestFields(originLine, header.Section{"host": {"example.com"}, "content-length": {"7"}})
+	parsed, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"7"}})
 	require.ErrorIs(t, err, checkErr)
 	require.Zero(t, parsed)
 	var fieldErr *FieldError
 	require.ErrorAs(t, err, &fieldErr)
 	require.Equal(t, "Content-Length", fieldErr.Name)
 	require.Equal(t, []RequestFields{{Authority: "example.com", ContentLength: 7, ContentLengthPresent: true}}, seen)
+}
+
+func TestTransferEncodingErrors(t *testing.T) {
+	headers := header.Headers{"host": {"example.com"}, "transfer-encoding": {"gzip"}}
+	parsed, err := processRequestFields(originLine, headers)
+	require.ErrorIs(t, err, fields.ErrInvalidTransferEncoding)
+	require.Zero(t, parsed)
+	var fieldErr *FieldError
+	require.ErrorAs(t, err, &fieldErr)
+	require.Equal(t, "Transfer-Encoding", fieldErr.Name)
+}
+
+func TestFramingConflict(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers header.Headers
+	}{
+		{"positive length", header.Headers{"host": {"example.com"}, "content-length": {"5"}, "transfer-encoding": {"chunked"}}},
+		{"zero length", header.Headers{"host": {"example.com"}, "content-length": {"0"}, "transfer-encoding": {"chunked"}}},
+		{"coding list", header.Headers{"host": {"example.com"}, "content-length": {"5"}, "transfer-encoding": {"gzip, chunked"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := processRequestFields(originLine, test.headers)
+			require.ErrorIs(t, err, fields.ErrFramingConflict)
+			require.NotErrorIs(t, err, fields.ErrInvalidTransferEncoding)
+			require.Zero(t, parsed)
+			var fieldErr *FieldError
+			require.ErrorAs(t, err, &fieldErr)
+			require.Equal(t, "Transfer-Encoding", fieldErr.Name)
+		})
+	}
+}
+
+func TestMalformedTransferEncodingPrecedesFramingConflict(t *testing.T) {
+	headers := header.Headers{"host": {"example.com"}, "content-length": {"5"}, "transfer-encoding": {"xchunked"}}
+	_, err := processRequestFields(originLine, headers)
+	require.ErrorIs(t, err, fields.ErrInvalidTransferEncoding)
+}
+
+func TestReadRequestRejectsFramingConflict(t *testing.T) {
+	message := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n"
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	require.ErrorIs(t, err, fields.ErrFramingConflict)
+	require.Nil(t, request)
 }

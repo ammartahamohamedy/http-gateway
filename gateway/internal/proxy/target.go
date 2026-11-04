@@ -24,12 +24,12 @@ var (
 	ErrAmbiguousPath = errors.New("proxy: request path contains an empty leading segment or dot-segment")
 )
 
-// CheckRequestTarget applies gateway policy to a request accepted by
+// checkRequestTarget applies gateway policy to a request accepted by
 // http1.ReadRequest. Origin-form, http(s) absolute-form, and asterisk-form are
 // forwarded; CONNECT is rejected. The effective authority's port, if nonempty,
 // must be in range. Paths are rejected rather than normalized, so forwarded
 // target bytes are never rewritten. It does not select the backend.
-func CheckRequestTarget(request *http1.Request) error {
+func checkRequestTarget(request *http1.Request) error {
 	target := request.RequestLine.RequestTarget
 	var path string
 	switch request.RequestLine.TargetForm() {

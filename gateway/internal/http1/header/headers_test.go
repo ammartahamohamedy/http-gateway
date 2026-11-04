@@ -9,14 +9,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSectionValues(t *testing.T) {
-	headers := Section{
+func TestHeadersValues(t *testing.T) {
+	headers := Headers{
 		"x-test":       {"first", "\"second,third\"\tpart\xff", ""},
 		"content-type": {"text/plain; charset=utf-8"},
 	}
 	tests := []struct {
 		name    string
-		headers Section
+		headers Headers
 		query   string
 		want    []string
 	}{
@@ -26,7 +26,7 @@ func TestSectionValues(t *testing.T) {
 		{"single value", headers, "content-type", []string{"text/plain; charset=utf-8"}},
 		{"missing name", headers, "Host", nil},
 		{"nil headers", nil, "X-Test", nil},
-		{"empty headers", Section{}, "X-Test", nil},
+		{"empty headers", Headers{}, "X-Test", nil},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -35,15 +35,15 @@ func TestSectionValues(t *testing.T) {
 	}
 }
 
-func TestSectionValuesReturnsIndependentSlice(t *testing.T) {
-	headers := Section{"x-test": {"original"}}
+func TestHeadersValuesReturnsIndependentSlice(t *testing.T) {
+	headers := Headers{"x-test": {"original"}}
 	values := headers.Values("x-test")
 	require.Equal(t, []string{"original"}, values)
 	values[0] = "changed"
-	require.Equal(t, Section{"x-test": {"original"}}, headers)
+	require.Equal(t, Headers{"x-test": {"original"}}, headers)
 }
 
-func TestParseField(t *testing.T) {
+func TestParseHeaderField(t *testing.T) {
 	tests := []struct {
 		name      string
 		rawLine   string
@@ -63,7 +63,7 @@ func TestParseField(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, value, err := ParseField(test.rawLine)
+			name, value, err := parseHeaderField(test.rawLine)
 			require.NoError(t, err)
 			require.Equal(t, test.wantName, name)
 			require.Equal(t, test.wantValue, value)
@@ -71,7 +71,7 @@ func TestParseField(t *testing.T) {
 	}
 }
 
-func TestParseFieldRejectsMalformedInput(t *testing.T) {
+func TestParseHeaderFieldRejectsMalformedInput(t *testing.T) {
 	tests := []struct {
 		name    string
 		rawLine string
@@ -94,7 +94,7 @@ func TestParseFieldRejectsMalformedInput(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			name, value, err := ParseField(test.rawLine)
+			name, value, err := parseHeaderField(test.rawLine)
 			require.Error(t, err)
 			require.Empty(t, name)
 			require.Empty(t, value)
@@ -102,11 +102,11 @@ func TestParseFieldRejectsMalformedInput(t *testing.T) {
 	}
 }
 
-func TestParseFieldValueBytes(t *testing.T) {
+func TestParseHeaderFieldValueBytes(t *testing.T) {
 	for b := 0; b <= 255; b++ {
 		t.Run(fmt.Sprintf("0x%02X", b), func(t *testing.T) {
 			value := "a" + string([]byte{byte(b)}) + "z"
-			name, gotValue, err := ParseField("X-Test: " + value)
+			name, gotValue, err := parseHeaderField("X-Test: " + value)
 			if (b < 0x20 && b != 0x09) || b == 0x7f {
 				require.Error(t, err)
 				require.Empty(t, name)
@@ -123,7 +123,7 @@ func TestParseFieldValueBytes(t *testing.T) {
 // testLimits matches the request limits used by http1.ReadRequest.
 var testLimits = Limits{LineBytes: 8 * 1024, SectionBytes: 32 * 1024, Fields: 100}
 
-func TestReadSectionLimits(t *testing.T) {
+func TestReadHeadersSectionLimits(t *testing.T) {
 	fieldLine := func(size int) string { return "X: " + strings.Repeat("a", size-3) }
 	prefix := strings.Repeat(fieldLine(testLimits.LineBytes)+"\r\n", 3)
 	lastLineSize := testLimits.SectionBytes - len(prefix) - 4
@@ -152,7 +152,7 @@ func TestReadSectionLimits(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			headers, err := ReadSection(bufio.NewReaderSize(strings.NewReader(test.section), 16), testLimits)
+			headers, err := ReadHeadersSection(bufio.NewReaderSize(strings.NewReader(test.section), 16), testLimits)
 			if test.wantErr != nil {
 				require.ErrorIs(t, err, test.wantErr)
 				require.Nil(t, headers)

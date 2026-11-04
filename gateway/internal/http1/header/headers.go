@@ -32,25 +32,25 @@ type Limits struct {
 	Fields       int
 }
 
-// Section maps lowercase field names to separate field-line values in received
+// Headers maps lowercase field names to separate field-line values in received
 // order for each name. Keys must be lowercase; order across names and original
 // name casing are not retained.
-type Section map[string][]string
+type Headers map[string][]string
 
 // Values returns matching field-line values in order, comparing names without
 // regard to case. It does not combine or split values. It returns nil if no
-// fields match, including for nil or empty Section. The returned slice is
-// independent of s.
-func (s Section) Values(name string) []string {
-	return append([]string(nil), s[strings.ToLower(name)]...)
+// fields match, including for nil or empty Headers. The returned slice is
+// independent of h.
+func (h Headers) Values(name string) []string {
+	return append([]string(nil), h[strings.ToLower(name)]...)
 }
 
-// ReadSection reads the bounded header section, unfolds continuations, and
-// validates each field's generic syntax with ParseField. It lowercases names
+// ReadHeadersSection reads the bounded header section, unfolds continuations, and
+// validates each field's generic syntax with parseHeaderField. It lowercases names
 // and appends values in order for each name without combining them. It does not
 // validate field-specific semantics or message framing.
-func ReadSection(reader *bufio.Reader, limits Limits) (Section, error) {
-	var section Section
+func ReadHeadersSection(reader *bufio.Reader, limits Limits) (Headers, error) {
+	var headers Headers
 	var pending strings.Builder
 	sectionBytes := 0
 	fieldCount := 0
@@ -82,20 +82,20 @@ func ReadSection(reader *bufio.Reader, limits Limits) (Section, error) {
 			continue
 		}
 		if pending.Len() > 0 {
-			name, value, err := ParseField(pending.String())
+			name, value, err := parseHeaderField(pending.String())
 			if err != nil {
 				return nil, err
 			}
-			if section == nil {
-				section = make(Section)
+			if headers == nil {
+				headers = make(Headers)
 			}
 			name = strings.ToLower(name)
-			section[name] = append(section[name], value)
+			headers[name] = append(headers[name], value)
 			fieldCount++
 			pending.Reset()
 		}
 		if rawLine == "" {
-			return section, nil
+			return headers, nil
 		}
 		if fieldCount == limits.Fields {
 			return nil, ErrTooManyFields
@@ -104,11 +104,11 @@ func ReadSection(reader *bufio.Reader, limits Limits) (Section, error) {
 	}
 }
 
-// ParseField parses one field line without CRLF. It preserves name casing and
+// parseHeaderField parses one field line without CRLF. It preserves name casing and
 // value bytes, removing only surrounding SP/HTAB from the value. It checks
 // generic syntax, not field-specific semantics, and does not enforce size limits.
 // On error, both returned strings are empty.
-func ParseField(rawLine string) (name, value string, err error) {
+func parseHeaderField(rawLine string) (name, value string, err error) {
 	name, value, found := strings.Cut(rawLine, ":")
 	if !found {
 		return "", "", errors.New("http1: header field is missing a colon")

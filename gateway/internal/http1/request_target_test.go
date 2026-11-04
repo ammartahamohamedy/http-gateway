@@ -23,7 +23,7 @@ func TestRequestLineTargetForm(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.rawLine, func(t *testing.T) {
-			line, err := ParseRequestLine(test.rawLine)
+			line, err := parseRequestLine(test.rawLine)
 			require.NoError(t, err)
 			require.Equal(t, test.want, line.TargetForm())
 		})

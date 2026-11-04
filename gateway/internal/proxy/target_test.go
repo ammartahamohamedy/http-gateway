@@ -56,7 +56,7 @@ func TestCheckRequestTarget(t *testing.T) {
 			message := test.startLine + "\r\nHost: " + test.host + "\r\n\r\n"
 			request, err := http1.ReadRequest(bufio.NewReader(strings.NewReader(message)))
 			require.NoError(t, err)
-			err = CheckRequestTarget(request)
+			err = checkRequestTarget(request)
 			if test.wantErr != nil {
 				require.ErrorIs(t, err, test.wantErr)
 				return

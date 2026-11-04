@@ -32,7 +32,7 @@ func TestParseRequestLine(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			line, err := ParseRequestLine(test.rawLine)
+			line, err := parseRequestLine(test.rawLine)
 			require.NoError(t, err)
 			require.Equal(t, RequestLine{
 				Method:        test.method,
@@ -97,7 +97,7 @@ func TestParseRequestLineRejectsMalformedInput(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			line, err := ParseRequestLine(test.rawLine)
+			line, err := parseRequestLine(test.rawLine)
 			require.Error(t, err)
 			require.Equal(t, RequestLine{}, line)
 		})
@@ -106,7 +106,7 @@ func TestParseRequestLineRejectsMalformedInput(t *testing.T) {
 
 func TestParseRequestLineDoesNotEnforceReadLimit(t *testing.T) {
 	requestTarget := "/" + strings.Repeat("a", maxRequestLineBytes)
-	line, err := ParseRequestLine("GET " + requestTarget + " HTTP/1.1")
+	line, err := parseRequestLine("GET " + requestTarget + " HTTP/1.1")
 	require.NoError(t, err)
 	require.Equal(t, RequestLine{Method: "GET", RequestTarget: requestTarget, Version: "1.1"}, line)
 }

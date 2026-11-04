@@ -30,8 +30,8 @@ func IsDigits(s string) bool {
 // ASCII, SP, HTAB, and obs-text (0x80-0xFF). It rejects other controls and DEL.
 // Surrounding whitespace is permitted; callers trim it as their grammar requires.
 func IsFieldValue(s string) bool {
-	for i := 0; i < len(s); i++ {
-		if b := s[i]; (b < 0x20 && b != '\t') || b == 0x7f {
+	for _, b := range []byte(s) {
+		if (b < 0x20 && b != '\t') || b == 0x7f {
 			return false
 		}
 	}

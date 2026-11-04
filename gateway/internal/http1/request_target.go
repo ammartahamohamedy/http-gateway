@@ -27,7 +27,7 @@ const (
 	AsteriskForm
 )
 
-// TargetForm reports the form of a request-target accepted by ParseRequestLine.
+// TargetForm reports the form of a request-target accepted by parseRequestLine.
 // The result is meaningful only for a validated RequestLine.
 func (line RequestLine) TargetForm() TargetForm {
 	switch {
