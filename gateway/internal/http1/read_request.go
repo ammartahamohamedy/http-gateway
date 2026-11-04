@@ -6,7 +6,7 @@ import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 )
 
-// ReadRequest skips leading empty CRLF lines, parses the request-line, and
+// ReadRequest skips up to 4 leading empty CRLF lines, parses the request-line, and
 // collects headers through the terminating empty line. Obsolete folding is
 // replaced with one SP per continuation before field parsing. Header names are
 // stored lowercase, with separate values in order for each name. The supported

@@ -19,6 +19,11 @@ import (
 // https://datatracker.ietf.org/doc/html/rfc9112#section-3
 const maxRequestLineBytes = 8 * 1024
 
+// maxLeadingEmptyLines caps the empty lines skipped before a request-line, so a
+// client cannot hold a connection by sending CRLFs forever. This is a local
+// limit: RFC 9112, Section 2.2 asks servers to ignore at least one.
+const maxLeadingEmptyLines = 4
+
 // requestHeaderLimits are local limits for a request header section: 8 KiB per
 // physical line, 32 KiB in total including CRLFs, and at most 100 fields.
 var requestHeaderLimits = header.Limits{
@@ -30,6 +35,10 @@ var requestHeaderLimits = header.Limits{
 // ErrRequestLineTooLong is returned by ReadRequest when request-line content
 // exceeds 8192 bytes, excluding its terminating CRLF.
 var ErrRequestLineTooLong = errors.New("http1: request line exceeds 8192 bytes")
+
+// ErrTooManyLeadingEmptyLines is returned by ReadRequest when more than 4 empty
+// lines precede the request-line.
+var ErrTooManyLeadingEmptyLines = errors.New("http1: too many empty lines before request line")
 
 // RequestLine contains the method, request-target, and HTTP version number
 // from a request's start-line, excluding its CRLF terminator.
@@ -51,12 +60,13 @@ type Request struct {
 	Body        io.ReadCloser
 }
 
-// processRequestLine skips leading empty CRLF lines, reads a bounded request-line,
-// and calls parseRequestLine to validate and parse its method, target, and version.
-// Oversized lines return ErrRequestLineTooLong. Read errors are wrapped;
+// processRequestLine skips up to maxLeadingEmptyLines empty CRLF lines, reads a
+// bounded request-line, and calls parseRequestLine to validate and parse its
+// method, target, and version. Oversized lines return ErrRequestLineTooLong, and
+// further empty lines return ErrTooManyLeadingEmptyLines. Read errors are wrapped;
 // parsing errors are returned unchanged.
 func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
-	for {
+	for range maxLeadingEmptyLines + 1 {
 		rawLine, err := lineio.ReadCRLFLine(reader, maxRequestLineBytes)
 		if errors.Is(err, lineio.ErrLineTooLong) {
 			return RequestLine{}, ErrRequestLineTooLong
@@ -69,6 +79,7 @@ func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
 		}
 		return parseRequestLine(rawLine)
 	}
+	return RequestLine{}, ErrTooManyLeadingEmptyLines
 }
 
 // parseRequestLine parses line contents without a CRLF terminator. It requires

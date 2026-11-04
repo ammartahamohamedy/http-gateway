@@ -40,6 +40,25 @@ func TestReadRequestSizeLimit(t *testing.T) {
 	require.ErrorIs(t, err, ErrRequestLineTooLong)
 }
 
+func TestReadRequestLeadingEmptyLines(t *testing.T) {
+	const message = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+
+	atLimit := strings.Repeat("\r\n", maxLeadingEmptyLines) + message
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader(atLimit)))
+	require.NoError(t, err)
+	require.Equal(t, "GET", request.RequestLine.Method)
+
+	overLimit := strings.Repeat("\r\n", maxLeadingEmptyLines+1) + message
+	request, err = ReadRequest(bufio.NewReader(strings.NewReader(overLimit)))
+	require.ErrorIs(t, err, ErrTooManyLeadingEmptyLines)
+	require.Nil(t, request)
+
+	// A client sending only CRLFs is refused, not read forever.
+	endless := strings.NewReader(strings.Repeat("\r\n", 1000))
+	_, err = ReadRequest(bufio.NewReader(endless))
+	require.ErrorIs(t, err, ErrTooManyLeadingEmptyLines)
+}
+
 func TestReadRequest(t *testing.T) {
 	for _, test := range []struct {
 		name   string
