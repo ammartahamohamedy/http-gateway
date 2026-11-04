@@ -67,6 +67,33 @@ func applyAcceptEncodingRule(values []string, _ RequestLine, _ *RequestFields) e
 	return fields.ValidateAcceptEncoding(values)
 }
 
+func applyOriginRule(values []string, _ RequestLine, out *RequestFields) error {
+	origin, err := fields.ParseOrigin(values)
+	if err != nil {
+		return err
+	}
+	out.Origin = origin
+	return nil
+}
+
+func applyAccessControlRequestMethodRule(values []string, _ RequestLine, out *RequestFields) error {
+	method, err := fields.ParseAccessControlRequestMethod(values)
+	if err != nil {
+		return err
+	}
+	out.AccessControlRequestMethod = method
+	return nil
+}
+
+func applyAccessControlRequestHeadersRule(values []string, _ RequestLine, out *RequestFields) error {
+	names, err := fields.ParseAccessControlRequestHeaders(values)
+	if err != nil {
+		return err
+	}
+	out.AccessControlRequestHeaders = names
+	return nil
+}
+
 // checkFramingConflict rejects a request framed by both Transfer-Encoding and
 // Content-Length rather than letting one override the other (RFC 9112, Section
 // 6.3). This is strict by choice: Content-Length: 0 conflicts too.

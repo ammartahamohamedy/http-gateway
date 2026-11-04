@@ -30,6 +30,18 @@ type RequestFields struct {
 	// Expectations lists the Expect members in received order, with names
 	// lowercased. Listing one does not mean the gateway can satisfy it.
 	Expectations []string
+
+	// Origin is the Origin value as received, or empty when absent. It carries
+	// no trust: allowed origins are gateway policy.
+	Origin string
+
+	// AccessControlRequestMethod is the requested method as received, or empty
+	// when absent. Recognizing a preflight is gateway policy.
+	AccessControlRequestMethod string
+
+	// AccessControlRequestHeaders lists the requested field names, lowercased,
+	// in received order.
+	AccessControlRequestHeaders []string
 }
 
 // FieldError reports which supported field rule or cross-check rejected a
@@ -61,12 +73,9 @@ type requestCrossCheck struct {
 	apply func(line RequestLine, headers header.Headers, parsed RequestFields) error
 }
 
-// requestFieldRules lists the implemented field rules in evaluation order:
-// routing and framing fields first, so their errors take precedence. The
-// planned order for the remaining fields is Origin,
-// Access-Control-Request-Method, and Access-Control-Request-Headers. Add a
-// rule only with its working validator; fields without a rule are accepted
-// after generic header validation.
+// requestFieldRules lists the field rules in evaluation order: routing and
+// framing fields first, so their errors take precedence. Fields without a rule
+// are accepted after generic header validation.
 var requestFieldRules = []requestFieldRule{
 	{name: "Host", apply: applyHostRule},
 	{name: "Content-Length", apply: applyContentLengthRule},
@@ -77,10 +86,12 @@ var requestFieldRules = []requestFieldRule{
 	{name: "Accept", apply: applyAcceptRule},
 	{name: "Content-Encoding", apply: applyContentEncodingRule},
 	{name: "Accept-Encoding", apply: applyAcceptEncodingRule},
+	{name: "Origin", apply: applyOriginRule},
+	{name: "Access-Control-Request-Method", apply: applyAccessControlRequestMethodRule},
+	{name: "Access-Control-Request-Headers", apply: applyAccessControlRequestHeadersRule},
 }
 
-// requestCrossChecks lists the implemented cross-field checks in evaluation
-// order.
+// requestCrossChecks lists the cross-field checks in evaluation order.
 var requestCrossChecks = []requestCrossCheck{
 	{name: "Transfer-Encoding", apply: checkFramingConflict},
 	{name: "Connection", apply: checkConnectionOptions},

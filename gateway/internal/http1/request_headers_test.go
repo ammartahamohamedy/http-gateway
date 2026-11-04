@@ -18,7 +18,11 @@ func TestRequestFieldRulesOrder(t *testing.T) {
 	for _, rule := range requestFieldRules {
 		names = append(names, rule.name)
 	}
-	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding", "Connection", "Expect", "Content-Type", "Accept", "Content-Encoding", "Accept-Encoding"}, names)
+	require.Equal(t, []string{
+		"Host", "Content-Length", "Transfer-Encoding", "Connection", "Expect",
+		"Content-Type", "Accept", "Content-Encoding", "Accept-Encoding",
+		"Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers",
+	}, names)
 }
 
 func TestProcessRequestFieldsFirstErrorIsDeterministic(t *testing.T) {
@@ -73,6 +77,11 @@ func TestReadRequestFields(t *testing.T) {
 			RequestFields{Authority: "example.com", TransferCodings: []string{"chunked"}, Expectations: []string{"100-continue"}}},
 		{"unfamiliar expectation without content", "GET / HTTP/1.1\r\nHost: example.com\r\nExpect: x-custom\r\n\r\n",
 			RequestFields{Authority: "example.com", Expectations: []string{"x-custom"}}},
+		{"preflight fields", "OPTIONS / HTTP/1.1\r\nHost: example.com\r\nOrigin: https://app.example\r\nAccess-Control-Request-Method: PUT\r\nAccess-Control-Request-Headers: X-One, Content-Type\r\n\r\n",
+			RequestFields{Authority: "example.com", Origin: "https://app.example", AccessControlRequestMethod: "PUT",
+				AccessControlRequestHeaders: []string{"x-one", "content-type"}}},
+		{"request fields without preflight context", "GET / HTTP/1.1\r\nHost: example.com\r\nAccess-Control-Request-Method: PUT\r\n\r\n",
+			RequestFields{Authority: "example.com", AccessControlRequestMethod: "PUT"}},
 		{"unknown valid fields accepted", "GET / HTTP/1.1\r\nHost: example.com\r\nX-Unfamiliar: \"a,b\"\r\nX-Unfamiliar: c\r\n\r\n",
 			RequestFields{Authority: "example.com"}},
 	}
@@ -309,4 +318,27 @@ func TestMediaTypeFieldsLeaveMetadataUnchanged(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, RequestFields{Authority: "example.com", ContentLengthPresent: true}, request.Fields)
 	require.Equal(t, []string{"text/plain"}, request.Headers.Values("Content-Type"))
+}
+
+func TestCORSFieldErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   string
+		headers header.Headers
+		want    error
+	}{
+		{"origin", "Origin", header.Headers{"host": {"example.com"}, "origin": {"https://a.example/"}}, fields.ErrInvalidOrigin},
+		{"method", "Access-Control-Request-Method", header.Headers{"host": {"example.com"}, "access-control-request-method": {"GET, PUT"}}, fields.ErrInvalidAccessControlRequestMethod},
+		{"headers", "Access-Control-Request-Headers", header.Headers{"host": {"example.com"}, "access-control-request-headers": {""}}, fields.ErrInvalidAccessControlRequestHeaders},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := processRequestFields(originLine, test.headers)
+			require.ErrorIs(t, err, test.want)
+			require.Zero(t, parsed)
+			var fieldErr *FieldError
+			require.ErrorAs(t, err, &fieldErr)
+			require.Equal(t, test.field, fieldErr.Name)
+		})
+	}
 }
