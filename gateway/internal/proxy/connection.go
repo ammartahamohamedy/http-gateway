@@ -5,20 +5,32 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"time"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 )
 
-// HandleConnection reads one request, applies target policy, and prints its
-// fields if accepted. It attempts to close the connection before returning.
-// Read, validation, policy, and close errors are logged without terminating
-// the listener. No response is sent and nothing is forwarded yet.
+// requestHeadTimeout bounds reading the whole request head, so a client sending
+// it slowly cannot hold the connection. A per-line cap alone would not stop that.
+var requestHeadTimeout = 10 * time.Second
+
+// HandleConnection reads one request head within requestHeadTimeout, applies
+// target policy, and prints its fields if accepted. It attempts to close the
+// connection before returning. Deadline, read, validation, policy, and close
+// errors are logged without terminating the listener. No response is sent and
+// nothing is forwarded yet. Body reading must set its own read deadline, since
+// this one stays in force after the head is read.
 func HandleConnection(connection net.Conn) {
 	defer func() {
 		if err := connection.Close(); err != nil {
 			log.Printf("closing connection: %v", err)
 		}
 	}()
+
+	if err := connection.SetReadDeadline(time.Now().Add(requestHeadTimeout)); err != nil {
+		log.Printf("setting read deadline: %v", err)
+		return
+	}
 
 	reader := bufio.NewReader(connection)
 	request, err := http1.ReadRequest(reader)
