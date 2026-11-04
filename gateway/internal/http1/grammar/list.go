@@ -74,3 +74,11 @@ func IsQuotedString(s string) bool {
 	}
 	return !escaped
 }
+
+// IsParameter reports whether s is exactly one RFC 9110 parameter:
+// token "=" ( token / quoted-string ), with no whitespace around "=" (Section
+// 5.6.6). Fields that allow bad whitespace there check it themselves.
+func IsParameter(s string) bool {
+	name, value, found := strings.Cut(s, "=")
+	return found && IsToken(name) && (IsToken(value) || IsQuotedString(value))
+}

@@ -18,7 +18,7 @@ func TestRequestFieldRulesOrder(t *testing.T) {
 	for _, rule := range requestFieldRules {
 		names = append(names, rule.name)
 	}
-	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding", "Connection"}, names)
+	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding", "Connection", "Expect"}, names)
 }
 
 func TestProcessRequestFieldsFirstErrorIsDeterministic(t *testing.T) {
@@ -67,6 +67,12 @@ func TestReadRequestFields(t *testing.T) {
 			RequestFields{Authority: "example.com", TransferCodings: []string{"gzip", "chunked"}}},
 		{"connection options", "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: Close\r\nConnection: TE\r\n\r\n",
 			RequestFields{Authority: "example.com", ConnectionOptions: []string{"close", "te"}}},
+		{"expect with length", "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nExpect: 100-Continue\r\n\r\n",
+			RequestFields{Authority: "example.com", ContentLength: 5, ContentLengthPresent: true, Expectations: []string{"100-continue"}}},
+		{"expect with chunked framing", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n",
+			RequestFields{Authority: "example.com", TransferCodings: []string{"chunked"}, Expectations: []string{"100-continue"}}},
+		{"unfamiliar expectation without content", "GET / HTTP/1.1\r\nHost: example.com\r\nExpect: x-custom\r\n\r\n",
+			RequestFields{Authority: "example.com", Expectations: []string{"x-custom"}}},
 		{"unknown valid fields accepted", "GET / HTTP/1.1\r\nHost: example.com\r\nX-Unfamiliar: \"a,b\"\r\nX-Unfamiliar: c\r\n\r\n",
 			RequestFields{Authority: "example.com"}},
 	}
@@ -198,5 +204,49 @@ func TestReadRequestRejectsProtectedConnectionOption(t *testing.T) {
 	message := "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: host\r\n\r\n"
 	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
 	require.ErrorIs(t, err, fields.ErrProtectedConnectionOption)
+	require.Nil(t, request)
+}
+
+func TestExpectErrors(t *testing.T) {
+	headers := header.Headers{"host": {"example.com"}, "expect": {"100 continue"}}
+	parsed, err := processRequestFields(originLine, headers)
+	require.ErrorIs(t, err, fields.ErrInvalidExpect)
+	require.Zero(t, parsed)
+	var fieldErr *FieldError
+	require.ErrorAs(t, err, &fieldErr)
+	require.Equal(t, "Expect", fieldErr.Name)
+}
+
+func TestExpectWithoutContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		headers header.Headers
+	}{
+		{"no framing", header.Headers{"host": {"example.com"}, "expect": {"100-continue"}}},
+		{"zero length", header.Headers{"host": {"example.com"}, "content-length": {"0"}, "expect": {"100-continue"}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := processRequestFields(originLine, test.headers)
+			require.ErrorIs(t, err, fields.ErrExpectWithoutContent)
+			require.NotErrorIs(t, err, fields.ErrInvalidExpect)
+			require.Zero(t, parsed)
+			var fieldErr *FieldError
+			require.ErrorAs(t, err, &fieldErr)
+			require.Equal(t, "Expect", fieldErr.Name)
+		})
+	}
+}
+
+func TestConnectionCheckPrecedesExpectCheck(t *testing.T) {
+	headers := header.Headers{"host": {"example.com"}, "connection": {"host"}, "expect": {"100-continue"}}
+	_, err := processRequestFields(originLine, headers)
+	require.ErrorIs(t, err, fields.ErrProtectedConnectionOption)
+}
+
+func TestReadRequestRejectsExpectWithoutContent(t *testing.T) {
+	message := "GET / HTTP/1.1\r\nHost: example.com\r\nExpect: 100-continue\r\n\r\n"
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	require.ErrorIs(t, err, fields.ErrExpectWithoutContent)
 	require.Nil(t, request)
 }

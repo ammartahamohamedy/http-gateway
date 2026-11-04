@@ -62,3 +62,12 @@ func TestIsQuotedString(t *testing.T) {
 		require.False(t, IsQuotedString(s), "%q", s)
 	}
 }
+
+func TestIsParameter(t *testing.T) {
+	for _, s := range []string{"a=b", `a="b c"`, `a="x=y"`, `a=""`} {
+		require.True(t, IsParameter(s), "%q", s)
+	}
+	for _, s := range []string{"", "a", "=b", "a=", "a =b", "a= b", "a=b=c", `a="b`, `"a"=b`} {
+		require.False(t, IsParameter(s), "%q", s)
+	}
+}

@@ -26,6 +26,10 @@ type RequestFields struct {
 	// ConnectionOptions lists the lowercase Connection options in received order.
 	// Forwarding must remove the fields they nominate.
 	ConnectionOptions []string
+
+	// Expectations lists the Expect members in received order, with names
+	// lowercased. Listing one does not mean the gateway can satisfy it.
+	Expectations []string
 }
 
 // FieldError reports which supported field rule or cross-check rejected a
@@ -59,7 +63,7 @@ type requestCrossCheck struct {
 
 // requestFieldRules lists the implemented field rules in evaluation order:
 // routing and framing fields first, so their errors take precedence. The
-// planned order for the remaining fields is Expect, Content-Type, Accept,
+// planned order for the remaining fields is Content-Type, Accept,
 // Content-Encoding, Accept-Encoding, Origin, Access-Control-Request-Method, and
 // Access-Control-Request-Headers. Add a
 // rule only with its working validator; fields without a rule are accepted
@@ -69,13 +73,15 @@ var requestFieldRules = []requestFieldRule{
 	{name: "Content-Length", apply: applyContentLengthRule},
 	{name: "Transfer-Encoding", apply: applyTransferEncodingRule},
 	{name: "Connection", apply: applyConnectionRule},
+	{name: "Expect", apply: applyExpectRule},
 }
 
 // requestCrossChecks lists the implemented cross-field checks in evaluation
-// order. A planned check covers Expect without a supported body framing context.
+// order.
 var requestCrossChecks = []requestCrossCheck{
 	{name: "Transfer-Encoding", apply: checkFramingConflict},
 	{name: "Connection", apply: checkConnectionOptions},
+	{name: "Expect", apply: checkExpectContent},
 }
 
 // processRequestFields runs every field rule in order and then every

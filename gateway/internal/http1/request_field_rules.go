@@ -42,6 +42,15 @@ func applyConnectionRule(values []string, _ RequestLine, out *RequestFields) err
 	return nil
 }
 
+func applyExpectRule(values []string, _ RequestLine, out *RequestFields) error {
+	expectations, err := fields.ParseExpect(values)
+	if err != nil {
+		return err
+	}
+	out.Expectations = expectations
+	return nil
+}
+
 // checkFramingConflict rejects a request framed by both Transfer-Encoding and
 // Content-Length rather than letting one override the other (RFC 9112, Section
 // 6.3). This is strict by choice: Content-Length: 0 conflicts too.
@@ -56,4 +65,11 @@ func checkFramingConflict(_ RequestLine, _ header.Headers, parsed RequestFields)
 // which forwarding would otherwise have to remove.
 func checkConnectionOptions(_ RequestLine, _ header.Headers, parsed RequestFields) error {
 	return fields.ValidateConnectionOptions(parsed.ConnectionOptions)
+}
+
+// checkExpectContent rejects 100-continue on a request with no content. Chunked
+// framing counts as content here, even though the gateway does not decode it.
+func checkExpectContent(_ RequestLine, _ header.Headers, parsed RequestFields) error {
+	hasContent := parsed.ContentLength > 0 || len(parsed.TransferCodings) > 0
+	return fields.ValidateExpectContent(parsed.Expectations, hasContent)
 }
