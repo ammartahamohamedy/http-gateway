@@ -33,6 +33,15 @@ func applyTransferEncodingRule(values []string, _ RequestLine, out *RequestField
 	return nil
 }
 
+func applyConnectionRule(values []string, _ RequestLine, out *RequestFields) error {
+	options, err := fields.ParseConnection(values)
+	if err != nil {
+		return err
+	}
+	out.ConnectionOptions = options
+	return nil
+}
+
 // checkFramingConflict rejects a request framed by both Transfer-Encoding and
 // Content-Length rather than letting one override the other (RFC 9112, Section
 // 6.3). This is strict by choice: Content-Length: 0 conflicts too.
@@ -41,4 +50,10 @@ func checkFramingConflict(_ RequestLine, _ header.Headers, parsed RequestFields)
 		return fields.ErrFramingConflict
 	}
 	return nil
+}
+
+// checkConnectionOptions rejects nominations of routing and framing fields,
+// which forwarding would otherwise have to remove.
+func checkConnectionOptions(_ RequestLine, _ header.Headers, parsed RequestFields) error {
+	return fields.ValidateConnectionOptions(parsed.ConnectionOptions)
 }

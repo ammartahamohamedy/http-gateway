@@ -18,7 +18,7 @@ func TestRequestFieldRulesOrder(t *testing.T) {
 	for _, rule := range requestFieldRules {
 		names = append(names, rule.name)
 	}
-	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding"}, names)
+	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding", "Connection"}, names)
 }
 
 func TestProcessRequestFieldsFirstErrorIsDeterministic(t *testing.T) {
@@ -65,6 +65,8 @@ func TestReadRequestFields(t *testing.T) {
 			RequestFields{}},
 		{"transfer codings", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: GZIP\r\nTransfer-Encoding: Chunked\r\n\r\n",
 			RequestFields{Authority: "example.com", TransferCodings: []string{"gzip", "chunked"}}},
+		{"connection options", "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: Close\r\nConnection: TE\r\n\r\n",
+			RequestFields{Authority: "example.com", ConnectionOptions: []string{"close", "te"}}},
 		{"unknown valid fields accepted", "GET / HTTP/1.1\r\nHost: example.com\r\nX-Unfamiliar: \"a,b\"\r\nX-Unfamiliar: c\r\n\r\n",
 			RequestFields{Authority: "example.com"}},
 	}
@@ -153,5 +155,48 @@ func TestReadRequestRejectsFramingConflict(t *testing.T) {
 	message := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n"
 	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
 	require.ErrorIs(t, err, fields.ErrFramingConflict)
+	require.Nil(t, request)
+}
+
+func TestConnectionErrors(t *testing.T) {
+	headers := header.Headers{"host": {"example.com"}, "connection": {"keep alive"}}
+	parsed, err := processRequestFields(originLine, headers)
+	require.ErrorIs(t, err, fields.ErrInvalidConnection)
+	require.Zero(t, parsed)
+	var fieldErr *FieldError
+	require.ErrorAs(t, err, &fieldErr)
+	require.Equal(t, "Connection", fieldErr.Name)
+}
+
+func TestConnectionNominatingProtectedField(t *testing.T) {
+	for _, value := range []string{"host", "Content-Length", "close, Transfer-Encoding"} {
+		t.Run(value, func(t *testing.T) {
+			headers := header.Headers{"host": {"example.com"}, "connection": {value}}
+			parsed, err := processRequestFields(originLine, headers)
+			require.ErrorIs(t, err, fields.ErrProtectedConnectionOption)
+			require.NotErrorIs(t, err, fields.ErrInvalidConnection)
+			require.Zero(t, parsed)
+			var fieldErr *FieldError
+			require.ErrorAs(t, err, &fieldErr)
+			require.Equal(t, "Connection", fieldErr.Name)
+		})
+	}
+}
+
+func TestFramingConflictPrecedesConnectionCheck(t *testing.T) {
+	headers := header.Headers{
+		"host":              {"example.com"},
+		"content-length":    {"5"},
+		"transfer-encoding": {"chunked"},
+		"connection":        {"content-length"},
+	}
+	_, err := processRequestFields(originLine, headers)
+	require.ErrorIs(t, err, fields.ErrFramingConflict)
+}
+
+func TestReadRequestRejectsProtectedConnectionOption(t *testing.T) {
+	message := "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: host\r\n\r\n"
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	require.ErrorIs(t, err, fields.ErrProtectedConnectionOption)
 	require.Nil(t, request)
 }
