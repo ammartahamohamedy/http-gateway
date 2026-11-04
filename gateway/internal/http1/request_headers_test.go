@@ -18,7 +18,7 @@ func TestRequestFieldRulesOrder(t *testing.T) {
 	for _, rule := range requestFieldRules {
 		names = append(names, rule.name)
 	}
-	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding", "Connection", "Expect", "Content-Type", "Accept"}, names)
+	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding", "Connection", "Expect", "Content-Type", "Accept", "Content-Encoding", "Accept-Encoding"}, names)
 }
 
 func TestProcessRequestFieldsFirstErrorIsDeterministic(t *testing.T) {
@@ -271,6 +271,36 @@ func TestMediaTypeFieldErrors(t *testing.T) {
 			require.Equal(t, test.field, fieldErr.Name)
 		})
 	}
+}
+
+func TestContentCodingFieldErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   string
+		headers header.Headers
+		want    error
+	}{
+		{"content encoding", "Content-Encoding", header.Headers{"host": {"example.com"}, "content-encoding": {"gzip;q=1"}}, fields.ErrInvalidContentEncoding},
+		{"accept encoding", "Accept-Encoding", header.Headers{"host": {"example.com"}, "accept-encoding": {"gzip;q=2"}}, fields.ErrInvalidAcceptEncoding},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := processRequestFields(originLine, test.headers)
+			require.ErrorIs(t, err, test.want)
+			require.Zero(t, parsed)
+			var fieldErr *FieldError
+			require.ErrorAs(t, err, &fieldErr)
+			require.Equal(t, test.field, fieldErr.Name)
+		})
+	}
+}
+
+func TestContentCodingFieldsLeaveMetadataUnchanged(t *testing.T) {
+	message := "GET / HTTP/1.1\r\nHost: example.com\r\nContent-Encoding: gzip\r\nAccept-Encoding: br;q=0.5\r\n\r\n"
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	require.NoError(t, err)
+	require.Equal(t, RequestFields{Authority: "example.com"}, request.Fields)
+	require.Equal(t, []string{"gzip"}, request.Headers.Values("Content-Encoding"))
 }
 
 func TestMediaTypeFieldsLeaveMetadataUnchanged(t *testing.T) {
