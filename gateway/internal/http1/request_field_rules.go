@@ -51,6 +51,14 @@ func applyExpectRule(values []string, _ RequestLine, out *RequestFields) error {
 	return nil
 }
 
+func applyContentTypeRule(values []string, _ RequestLine, _ *RequestFields) error {
+	return fields.ValidateContentType(values)
+}
+
+func applyAcceptRule(values []string, _ RequestLine, _ *RequestFields) error {
+	return fields.ValidateAccept(values)
+}
+
 // checkFramingConflict rejects a request framed by both Transfer-Encoding and
 // Content-Length rather than letting one override the other (RFC 9112, Section
 // 6.3). This is strict by choice: Content-Length: 0 conflicts too.

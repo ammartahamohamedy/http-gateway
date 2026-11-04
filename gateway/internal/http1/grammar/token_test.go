@@ -25,6 +25,15 @@ func TestIsDigits(t *testing.T) {
 	}
 }
 
+func TestIsQValue(t *testing.T) {
+	for _, s := range []string{"0", "0.", "0.5", "0.123", "1", "1.", "1.0", "1.000"} {
+		require.True(t, IsQValue(s), s)
+	}
+	for _, s := range []string{"", ".5", "0.1234", "1.1", "1.0000", "2", "01", "-0", "+1", "0,5", "0.5\n", " 1"} {
+		require.False(t, IsQValue(s), "%q", s)
+	}
+}
+
 func TestIsFieldValueBytes(t *testing.T) {
 	for b := 0; b <= 255; b++ {
 		t.Run(fmt.Sprintf("0x%02X", b), func(t *testing.T) {

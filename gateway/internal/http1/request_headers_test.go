@@ -18,7 +18,7 @@ func TestRequestFieldRulesOrder(t *testing.T) {
 	for _, rule := range requestFieldRules {
 		names = append(names, rule.name)
 	}
-	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding", "Connection", "Expect"}, names)
+	require.Equal(t, []string{"Host", "Content-Length", "Transfer-Encoding", "Connection", "Expect", "Content-Type", "Accept"}, names)
 }
 
 func TestProcessRequestFieldsFirstErrorIsDeterministic(t *testing.T) {
@@ -249,4 +249,34 @@ func TestReadRequestRejectsExpectWithoutContent(t *testing.T) {
 	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
 	require.ErrorIs(t, err, fields.ErrExpectWithoutContent)
 	require.Nil(t, request)
+}
+
+func TestMediaTypeFieldErrors(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   string
+		headers header.Headers
+		want    error
+	}{
+		{"content type", "Content-Type", header.Headers{"host": {"example.com"}, "content-type": {"text"}}, fields.ErrInvalidContentType},
+		{"accept", "Accept", header.Headers{"host": {"example.com"}, "accept": {"*/html"}}, fields.ErrInvalidAccept},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := processRequestFields(originLine, test.headers)
+			require.ErrorIs(t, err, test.want)
+			require.Zero(t, parsed)
+			var fieldErr *FieldError
+			require.ErrorAs(t, err, &fieldErr)
+			require.Equal(t, test.field, fieldErr.Name)
+		})
+	}
+}
+
+func TestMediaTypeFieldsLeaveMetadataUnchanged(t *testing.T) {
+	message := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 0\r\nContent-Type: text/plain\r\nAccept: */*;q=0.5\r\n\r\n"
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	require.NoError(t, err)
+	require.Equal(t, RequestFields{Authority: "example.com", ContentLengthPresent: true}, request.Fields)
+	require.Equal(t, []string{"text/plain"}, request.Headers.Values("Content-Type"))
 }

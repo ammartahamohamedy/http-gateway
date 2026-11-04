@@ -12,6 +12,10 @@ var (
 
 	// digitsPattern matches 1*DIGIT: ASCII decimal digits, excluding signs.
 	digitsPattern = regexp.MustCompile(`\A[0-9]+\z`)
+
+	// qvaluePattern matches a weight's value from 0 to 1 with at most three
+	// decimal places (RFC 9110, Section 12.4.2).
+	qvaluePattern = regexp.MustCompile(`\A(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)\z`)
 )
 
 // IsToken reports whether s is a nonempty RFC 9110 token. Methods and field
@@ -24,6 +28,11 @@ func IsToken(s string) bool {
 // syntax only, not numeric range.
 func IsDigits(s string) bool {
 	return digitsPattern.MatchString(s)
+}
+
+// IsQValue reports whether s is a valid weight value, such as "0.5" or "1.000".
+func IsQValue(s string) bool {
+	return qvaluePattern.MatchString(s)
 }
 
 // IsFieldValue reports whether s contains only field-value bytes: visible

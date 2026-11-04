@@ -63,9 +63,8 @@ type requestCrossCheck struct {
 
 // requestFieldRules lists the implemented field rules in evaluation order:
 // routing and framing fields first, so their errors take precedence. The
-// planned order for the remaining fields is Content-Type, Accept,
-// Content-Encoding, Accept-Encoding, Origin, Access-Control-Request-Method, and
-// Access-Control-Request-Headers. Add a
+// planned order for the remaining fields is Content-Encoding, Accept-Encoding,
+// Origin, Access-Control-Request-Method, and Access-Control-Request-Headers. Add a
 // rule only with its working validator; fields without a rule are accepted
 // after generic header validation.
 var requestFieldRules = []requestFieldRule{
@@ -74,6 +73,8 @@ var requestFieldRules = []requestFieldRule{
 	{name: "Transfer-Encoding", apply: applyTransferEncodingRule},
 	{name: "Connection", apply: applyConnectionRule},
 	{name: "Expect", apply: applyExpectRule},
+	{name: "Content-Type", apply: applyContentTypeRule},
+	{name: "Accept", apply: applyAcceptRule},
 }
 
 // requestCrossChecks lists the implemented cross-field checks in evaluation
