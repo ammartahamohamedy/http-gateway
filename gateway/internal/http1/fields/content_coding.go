@@ -2,6 +2,7 @@ package fields
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
@@ -22,12 +23,12 @@ var (
 // the body nor claims the gateway supports a coding. Errors match
 // ErrInvalidContentEncoding.
 func ValidateContentEncoding(values []string) error {
-	for _, value := range values {
+	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
 			return ErrInvalidContentEncoding
 		}
-		for _, member := range members {
+		for member := range slices.Values(members) {
 			if !grammar.IsToken(member) {
 				return ErrInvalidContentEncoding
 			}
@@ -43,12 +44,12 @@ func ValidateContentEncoding(values []string) error {
 // valid. The weight is the only parameter allowed. This selects no coding, and
 // the gateway compresses nothing. Errors match ErrInvalidAcceptEncoding.
 func ValidateAcceptEncoding(values []string) error {
-	for _, value := range values {
+	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
 			return ErrInvalidAcceptEncoding
 		}
-		for _, member := range members {
+		for member := range slices.Values(members) {
 			if !isAcceptEncodingMember(member) {
 				return ErrInvalidAcceptEncoding
 			}

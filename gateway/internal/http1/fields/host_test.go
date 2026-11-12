@@ -2,6 +2,7 @@ package fields
 
 import (
 	"fmt"
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -29,7 +30,7 @@ func TestValidateRequestHost(t *testing.T) {
 		{"empty CONNECT", []string{""}, "CONNECT", "example.com:443", ErrInvalidHost},
 		{"empty asterisk", []string{""}, "OPTIONS", "*", ErrInvalidHost},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			err := ValidateRequestHost(test.values, test.method, test.requestTarget)
 			if test.wantErr != nil {
@@ -42,19 +43,19 @@ func TestValidateRequestHost(t *testing.T) {
 }
 
 func TestValidateHostValue(t *testing.T) {
-	for _, value := range []string{
+	for value := range slices.Values([]string{
 		"", "example.com", "Example.COM", "localhost", "example.com.",
 		"127.0.0.1", "example.com:8080", "example.com:", "example.com:999999",
 		"xn--bcher-kva.example", "%C3%A9xample.example", "service_name.example",
 		"a,b", "a!$&'()*+;=.example", ":80",
 		"[::1]", "[2001:db8::1]:443", "[::ffff:192.0.2.1]", "[::1]:",
 		"[v1.future:host]:80", "[VF.future]",
-	} {
+	}) {
 		t.Run(fmt.Sprintf("valid_%q", value), func(t *testing.T) {
 			require.NoError(t, validateHostValue(value))
 		})
 	}
-	for _, value := range []string{
+	for value := range slices.Values([]string{
 		"example.com, other.example", "a b", "a\tb", "example.com\r\n",
 		"user@example.com", "http://example.com", "example.com/path",
 		"example.com?query", "example.com#fragment", "example.com\\path",
@@ -63,7 +64,7 @@ func TestValidateHostValue(t *testing.T) {
 		"::1", "[::1", "::1]", "[]", "[127.0.0.1]", "[2001:db8::g]",
 		"[::1::2]", "[fe80::1%eth0]", "[fe80::1%25eth0]", "[v1.]", "[vG.host]",
 		"[v1.bad%20host]", "[::1]extra", "[::1]:service",
-	} {
+	}) {
 		t.Run(fmt.Sprintf("invalid_%q", value), func(t *testing.T) {
 			require.ErrorIs(t, validateHostValue(value), ErrInvalidHost)
 		})
@@ -88,7 +89,7 @@ func TestRequestAuthority(t *testing.T) {
 		{"scheme case", "other.example", "GET", "HTTP://Target.Example/", "Target.Example"},
 		{"authority-less absolute", "", "GET", "urn:example:item", ""},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.NoError(t, ValidateRequestHost([]string{test.host}, test.method, test.requestTarget))
 			require.Equal(t, test.want, RequestAuthority(test.host, test.method, test.requestTarget))

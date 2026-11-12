@@ -1,6 +1,10 @@
 package http1
 
-import "github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
+import (
+	"slices"
+
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
+)
 
 // RequestFields holds metadata parsed from the supported request fields for
 // body framing and proxy policy. It only carries values that have a consumer;
@@ -103,12 +107,12 @@ var requestCrossChecks = []requestCrossCheck{
 // returns zero RequestFields so partially parsed metadata cannot escape.
 func processRequestFields(line RequestLine, headers header.Headers) (RequestFields, error) {
 	var parsed RequestFields
-	for _, rule := range requestFieldRules {
+	for rule := range slices.Values(requestFieldRules) {
 		if err := rule.apply(headers.Values(rule.name), line, &parsed); err != nil {
 			return RequestFields{}, &FieldError{Name: rule.name, Err: err}
 		}
 	}
-	for _, check := range requestCrossChecks {
+	for check := range slices.Values(requestCrossChecks) {
 		if err := check.apply(line, headers, parsed); err != nil {
 			return RequestFields{}, &FieldError{Name: check.name, Err: err}
 		}

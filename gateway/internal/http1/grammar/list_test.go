@@ -1,6 +1,7 @@
 package grammar
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,7 +23,7 @@ func TestSplitList(t *testing.T) {
 		{"escaped backslash ends quoting", `a;x="1\\",b`, []string{`a;x="1\\"`, "b"}},
 		{"backslash outside quotes is ordinary", `a\,b`, []string{`a\`, "b"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			members, ok := SplitList(test.value)
 			require.True(t, ok)
@@ -32,7 +33,7 @@ func TestSplitList(t *testing.T) {
 }
 
 func TestSplitListRejectsUnterminatedQuotedString(t *testing.T) {
-	for _, value := range []string{`"`, `a;x="1,b`, `a;x="1\"`} {
+	for value := range slices.Values([]string{`"`, `a;x="1,b`, `a;x="1\"`}) {
 		members, ok := SplitList(value)
 		require.False(t, ok, value)
 		require.Nil(t, members, value)
@@ -55,19 +56,19 @@ func TestTrimOWS(t *testing.T) {
 }
 
 func TestIsQuotedString(t *testing.T) {
-	for _, s := range []string{`""`, `"a b"`, "\"a\tb\"", `"a\"b"`, `"a\\"`, `"(,;=)"`, "\"\x80\xff\"", "\"\\\xff\""} {
+	for s := range slices.Values([]string{`""`, `"a b"`, "\"a\tb\"", `"a\"b"`, `"a\\"`, `"(,;=)"`, "\"\x80\xff\"", "\"\\\xff\""}) {
 		require.True(t, IsQuotedString(s), "%q", s)
 	}
-	for _, s := range []string{"", `"`, `a`, `"a`, `a"`, `"a"b"`, `"a\"`, "\"a\x00\"", "\"a\x7f\"", "\"a\nb\"", "\"\\\x01\""} {
+	for s := range slices.Values([]string{"", `"`, `a`, `"a`, `a"`, `"a"b"`, `"a\"`, "\"a\x00\"", "\"a\x7f\"", "\"a\nb\"", "\"\\\x01\""}) {
 		require.False(t, IsQuotedString(s), "%q", s)
 	}
 }
 
 func TestIsParameter(t *testing.T) {
-	for _, s := range []string{"a=b", `a="b c"`, `a="x=y"`, `a=""`} {
+	for s := range slices.Values([]string{"a=b", `a="b c"`, `a="x=y"`, `a=""`}) {
 		require.True(t, IsParameter(s), "%q", s)
 	}
-	for _, s := range []string{"", "a", "=b", "a=", "a =b", "a= b", "a=b=c", `a="b`, `"a"=b`} {
+	for s := range slices.Values([]string{"", "a", "=b", "a=", "a =b", "a= b", "a=b=c", `a="b`, `"a"=b`}) {
 		require.False(t, IsParameter(s), "%q", s)
 	}
 }

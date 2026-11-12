@@ -2,19 +2,37 @@ package fields
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
 )
 
-// chunkedCoding is the lowercase transfer-coding name that frames a request body.
-const chunkedCoding = "chunked"
+// ianaTransferCodingNames lists the HTTP Transfer Coding Registry entries,
+// including its deprecated, withdrawn, and reserved names.
+// https://www.iana.org/assignments/http-parameters/http-parameters.xhtml#transfer-coding
+var ianaTransferCodingNames = []string{
+	"chunked",
+	"compress",
+	"deflate",
+	"gzip",
+	"identity",   // withdrawn
+	"trailers",   // reserved for TE
+	"x-compress", // deprecated alias for compress
+	"x-gzip",     // deprecated alias for gzip
+}
 
 var (
 	// ErrInvalidTransferEncoding reports a malformed Transfer-Encoding list, or
 	// one whose codings do not end in exactly one parameterless chunked.
 	ErrInvalidTransferEncoding = errors.New("http1: Transfer-Encoding requires a valid coding list ending in one chunked coding")
+
+	// ErrUnsupportedTransferCoding reports a registry name the gateway cannot decode.
+	ErrUnsupportedTransferCoding = errors.New("http1: unsupported transfer coding")
+
+	// ErrUnknownTransferCoding reports a name absent from the transfer coding registry.
+	ErrUnknownTransferCoding = errors.New("http1: unknown transfer coding")
 
 	// ErrFramingConflict reports a request carrying both Transfer-Encoding and
 	// Content-Length, whose disagreement enables request smuggling.
@@ -29,9 +47,8 @@ var (
 // A request's final coding must be chunked, or its length cannot be determined
 // (RFC 9112, Section 6.3), and chunked must be applied once and take no
 // parameters (RFC 9112, Section 7). Other codings need only be syntactically
-// valid, and their parameters are checked but not returned. Recognizing a coding
-// does not mean the gateway supports it; this function decodes nothing, and any
-// rejection of transfer-coded bodies is policy for the caller. It does not check
+// valid, and their parameters are checked but not returned. Decoder support is
+// checked separately by CheckTransferCodingSupport. This function does not check
 // Content-Length conflicts. Errors match ErrInvalidTransferEncoding and return
 // nil codings. The input is not changed.
 func ParseTransferEncoding(values []string) ([]string, error) {
@@ -39,12 +56,12 @@ func ParseTransferEncoding(values []string) ([]string, error) {
 		return nil, nil
 	}
 	var codings []string
-	for _, value := range values {
+	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
 			return nil, ErrInvalidTransferEncoding
 		}
-		for _, member := range members {
+		for member := range slices.Values(members) {
 			name, ok := parseTransferCoding(member)
 			if !ok {
 				return nil, ErrInvalidTransferEncoding
@@ -56,10 +73,27 @@ func ParseTransferEncoding(values []string) ([]string, error) {
 		return nil, ErrInvalidTransferEncoding
 	}
 	last := len(codings) - 1
-	if codings[last] != chunkedCoding || slices.Contains(codings[:last], chunkedCoding) {
+	if codings[last] != "chunked" || slices.Contains(codings[:last], "chunked") {
 		return nil, ErrInvalidTransferEncoding
 	}
 	return codings, nil
+}
+
+// CheckTransferCodingSupport checks the lowercase names from ParseTransferEncoding
+// after framing validation. The gateway accepts chunked as its only transfer
+// coding. The first other name returns ErrUnsupportedTransferCoding if listed in
+// the IANA registry, or ErrUnknownTransferCoding otherwise. It reads no body data.
+func CheckTransferCodingSupport(codings []string) error {
+	for coding := range slices.Values(codings) {
+		if coding == "chunked" {
+			continue
+		}
+		if slices.Contains(ianaTransferCodingNames, coding) {
+			return fmt.Errorf("%w: %q", ErrUnsupportedTransferCoding, coding)
+		}
+		return fmt.Errorf("%w: %q", ErrUnknownTransferCoding, coding)
+	}
+	return nil
 }
 
 // parseTransferCoding validates one list member, a token followed by optional
@@ -76,10 +110,10 @@ func parseTransferCoding(member string) (string, bool) {
 	}
 	name = strings.ToLower(name)
 	parameters := parts[1:]
-	if name == chunkedCoding && len(parameters) > 0 {
+	if name == "chunked" && len(parameters) > 0 {
 		return "", false
 	}
-	for _, parameter := range parameters {
+	for parameter := range slices.Values(parameters) {
 		if !isTransferParameter(parameter) {
 			return "", false
 		}

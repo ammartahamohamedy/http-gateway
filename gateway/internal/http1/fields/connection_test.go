@@ -1,6 +1,7 @@
 package fields
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,7 @@ func TestParseConnection(t *testing.T) {
 		{"empty list members ignored", []string{",close,, x-hop ,"}, []string{"close", "x-hop"}},
 		{"duplicates preserved", []string{"close, CLOSE"}, []string{"close", "close"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			options, err := ParseConnection(test.values)
 			require.NoError(t, err)
@@ -51,7 +52,7 @@ func TestParseConnectionRejectsInvalidValues(t *testing.T) {
 		{"CR", []string{"close\r"}},
 		{"invalid second line", []string{"close", "a b"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			options, err := ParseConnection(test.values)
 			require.ErrorIs(t, err, ErrInvalidConnection)
@@ -68,10 +69,10 @@ func TestParseConnectionKeepsInput(t *testing.T) {
 }
 
 func TestValidateConnectionOptions(t *testing.T) {
-	for _, options := range [][]string{nil, {"close"}, {"keep-alive", "te", "upgrade", "x-host", "content-type"}} {
+	for options := range slices.Values([][]string{nil, {"close"}, {"keep-alive", "te", "upgrade", "x-host", "content-type"}}) {
 		require.NoError(t, ValidateConnectionOptions(options))
 	}
-	for _, options := range [][]string{{"host"}, {"content-length"}, {"transfer-encoding"}, {"close", "host"}} {
+	for options := range slices.Values([][]string{{"host"}, {"content-length"}, {"transfer-encoding"}, {"close", "host"}}) {
 		require.ErrorIs(t, ValidateConnectionOptions(options), ErrProtectedConnectionOption)
 	}
 }

@@ -2,6 +2,7 @@ package fields
 
 import (
 	"errors"
+	"slices"
 	"strings"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
@@ -36,7 +37,7 @@ func ValidateContentType(values []string) error {
 	if !found || !grammar.IsToken(mediaType) || !grammar.IsToken(subtype) {
 		return ErrInvalidContentType
 	}
-	for _, parameter := range parts[1:] {
+	for parameter := range slices.Values(parts[1:]) {
 		parameter = grammar.TrimOWS(parameter)
 		if parameter != "" && !grammar.IsParameter(parameter) {
 			return ErrInvalidContentType
@@ -50,12 +51,12 @@ func ValidateContentType(values []string) error {
 // removed. Absence, an empty value, repeated field lines, and empty list members
 // are valid. It selects no representation. Errors match ErrInvalidAccept.
 func ValidateAccept(values []string) error {
-	for _, value := range values {
+	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
 			return ErrInvalidAccept
 		}
-		for _, member := range members {
+		for member := range slices.Values(members) {
 			if !isAcceptMember(member) {
 				return ErrInvalidAccept
 			}
@@ -73,7 +74,7 @@ func isAcceptMember(member string) bool {
 		return false
 	}
 	weighted := false
-	for _, parameter := range parts[1:] {
+	for parameter := range slices.Values(parts[1:]) {
 		parameter = grammar.TrimOWS(parameter)
 		if parameter == "" {
 			continue

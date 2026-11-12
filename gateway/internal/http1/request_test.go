@@ -1,6 +1,7 @@
 package http1
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -30,7 +31,7 @@ func TestParseRequestLine(t *testing.T) {
 		{"method token characters", "M!#$%&'*+-.^_`|~09 / HTTP/1.1", "M!#$%&'*+-.^_`|~09", "/"},
 	}
 
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			line, err := parseRequestLine(test.rawLine)
 			require.NoError(t, err)
@@ -95,7 +96,7 @@ func TestParseRequestLineRejectsMalformedInput(t *testing.T) {
 		{"unexpected terminator", "GET / HTTP/1.1\r\n"},
 	}
 
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			line, err := parseRequestLine(test.rawLine)
 			require.Error(t, err)

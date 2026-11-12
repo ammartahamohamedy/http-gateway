@@ -1,6 +1,7 @@
 package fields
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func TestParseExpect(t *testing.T) {
 		{"value with empty parameters", []string{"x=1;;a=b;"}, []string{"x=1;;a=b;"}},
 		{"100-continue with value stays distinct", []string{"100-Continue=x"}, []string{"100-continue=x"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			expectations, err := ParseExpect(test.values)
 			require.NoError(t, err)
@@ -63,7 +64,7 @@ func TestParseExpectRejectsInvalidValues(t *testing.T) {
 		{"NUL", []string{"x\x00"}},
 		{"invalid second line", []string{"x", "a b"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			expectations, err := ParseExpect(test.values)
 			require.ErrorIs(t, err, ErrInvalidExpect)

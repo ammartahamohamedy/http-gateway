@@ -3,6 +3,7 @@ package http1
 import (
 	"bufio"
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 
@@ -15,7 +16,7 @@ var originLine = RequestLine{Method: "GET", RequestTarget: "/", Version: "1.1"}
 
 func TestRequestFieldRulesOrder(t *testing.T) {
 	var names []string
-	for _, rule := range requestFieldRules {
+	for rule := range slices.Values(requestFieldRules) {
 		names = append(names, rule.name)
 	}
 	require.Equal(t, []string{
@@ -85,7 +86,7 @@ func TestReadRequestFields(t *testing.T) {
 		{"unknown valid fields accepted", "GET / HTTP/1.1\r\nHost: example.com\r\nX-Unfamiliar: \"a,b\"\r\nX-Unfamiliar: c\r\n\r\n",
 			RequestFields{Authority: "example.com"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			request, err := ReadRequest(bufio.NewReader(strings.NewReader(test.message)))
 			require.NoError(t, err)
@@ -147,7 +148,7 @@ func TestFramingConflict(t *testing.T) {
 		{"zero length", header.Headers{"host": {"example.com"}, "content-length": {"0"}, "transfer-encoding": {"chunked"}}},
 		{"coding list", header.Headers{"host": {"example.com"}, "content-length": {"5"}, "transfer-encoding": {"gzip, chunked"}}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
 			require.ErrorIs(t, err, fields.ErrFramingConflict)
@@ -184,7 +185,7 @@ func TestConnectionErrors(t *testing.T) {
 }
 
 func TestConnectionNominatingProtectedField(t *testing.T) {
-	for _, value := range []string{"host", "Content-Length", "close, Transfer-Encoding"} {
+	for value := range slices.Values([]string{"host", "Content-Length", "close, Transfer-Encoding"}) {
 		t.Run(value, func(t *testing.T) {
 			headers := header.Headers{"host": {"example.com"}, "connection": {value}}
 			parsed, err := processRequestFields(originLine, headers)
@@ -234,7 +235,7 @@ func TestExpectWithoutContent(t *testing.T) {
 		{"no framing", header.Headers{"host": {"example.com"}, "expect": {"100-continue"}}},
 		{"zero length", header.Headers{"host": {"example.com"}, "content-length": {"0"}, "expect": {"100-continue"}}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
 			require.ErrorIs(t, err, fields.ErrExpectWithoutContent)
@@ -270,7 +271,7 @@ func TestMediaTypeFieldErrors(t *testing.T) {
 		{"content type", "Content-Type", header.Headers{"host": {"example.com"}, "content-type": {"text"}}, fields.ErrInvalidContentType},
 		{"accept", "Accept", header.Headers{"host": {"example.com"}, "accept": {"*/html"}}, fields.ErrInvalidAccept},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
 			require.ErrorIs(t, err, test.want)
@@ -292,7 +293,7 @@ func TestContentCodingFieldErrors(t *testing.T) {
 		{"content encoding", "Content-Encoding", header.Headers{"host": {"example.com"}, "content-encoding": {"gzip;q=1"}}, fields.ErrInvalidContentEncoding},
 		{"accept encoding", "Accept-Encoding", header.Headers{"host": {"example.com"}, "accept-encoding": {"gzip;q=2"}}, fields.ErrInvalidAcceptEncoding},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
 			require.ErrorIs(t, err, test.want)
@@ -331,7 +332,7 @@ func TestCORSFieldErrors(t *testing.T) {
 		{"method", "Access-Control-Request-Method", header.Headers{"host": {"example.com"}, "access-control-request-method": {"GET, PUT"}}, fields.ErrInvalidAccessControlRequestMethod},
 		{"headers", "Access-Control-Request-Headers", header.Headers{"host": {"example.com"}, "access-control-request-headers": {""}}, fields.ErrInvalidAccessControlRequestHeaders},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
 			require.ErrorIs(t, err, test.want)

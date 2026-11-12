@@ -39,7 +39,8 @@ func IsQValue(s string) bool {
 // ASCII, SP, HTAB, and obs-text (0x80-0xFF). It rejects other controls and DEL.
 // Surrounding whitespace is permitted; callers trim it as their grammar requires.
 func IsFieldValue(s string) bool {
-	for _, b := range []byte(s) {
+	for i := range len(s) {
+		b := s[i]
 		if (b < 0x20 && b != '\t') || b == 0x7f {
 			return false
 		}

@@ -1,6 +1,9 @@
 package grammar
 
-import "strings"
+import (
+	"slices"
+	"strings"
+)
 
 // SplitList splits one field-line value into its comma-separated list members
 // (RFC 9110, Section 5.6.1). Commas inside quoted-strings do not separate
@@ -13,7 +16,7 @@ func SplitList(value string) ([]string, bool) {
 		return nil, false
 	}
 	members := make([]string, 0, len(parts))
-	for _, part := range parts {
+	for part := range slices.Values(parts) {
 		if member := TrimOWS(part); member != "" {
 			members = append(members, member)
 		}
@@ -60,7 +63,8 @@ func IsQuotedString(s string) bool {
 		return false
 	}
 	escaped := false
-	for _, b := range []byte(s[1 : len(s)-1]) {
+	for i := 1; i < len(s)-1; i++ {
+		b := s[i]
 		switch {
 		case (b < 0x20 && b != '\t') || b == 0x7f:
 			return false

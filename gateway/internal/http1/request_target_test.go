@@ -1,6 +1,7 @@
 package http1
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ func TestRequestLineTargetForm(t *testing.T) {
 		{"OPTIONS * HTTP/1.1", AsteriskForm},
 		{"OPTIONS /path HTTP/1.1", OriginForm},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.rawLine, func(t *testing.T) {
 			line, err := parseRequestLine(test.rawLine)
 			require.NoError(t, err)

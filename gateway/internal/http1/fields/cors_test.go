@@ -1,6 +1,7 @@
 package fields
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,7 +23,7 @@ func TestParseOrigin(t *testing.T) {
 		{"IPv4", []string{"http://127.0.0.1:3000"}, "http://127.0.0.1:3000"},
 		{"IPv6", []string{"http://[::1]:3000"}, "http://[::1]:3000"},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			origin, err := ParseOrigin(test.values)
 			require.NoError(t, err)
@@ -58,7 +59,7 @@ func TestParseOriginRejectsInvalidValues(t *testing.T) {
 		{"obs-text", []string{"https://ex\xffample.com"}},
 		{"NUL", []string{"https://example.com\x00"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			origin, err := ParseOrigin(test.values)
 			require.ErrorIs(t, err, ErrInvalidOrigin)
@@ -79,7 +80,7 @@ func TestParseAccessControlRequestMethod(t *testing.T) {
 		{"case preserved", []string{"patch"}, "patch"},
 		{"extension method", []string{"X-CUSTOM"}, "X-CUSTOM"},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			method, err := ParseAccessControlRequestMethod(test.values)
 			require.NoError(t, err)
@@ -100,7 +101,7 @@ func TestParseAccessControlRequestMethodRejectsInvalidValues(t *testing.T) {
 		{"non-token", []string{"PUT/1"}},
 		{"NUL", []string{"PUT\x00"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			method, err := ParseAccessControlRequestMethod(test.values)
 			require.ErrorIs(t, err, ErrInvalidAccessControlRequestMethod)
@@ -123,7 +124,7 @@ func TestParseAccessControlRequestHeaders(t *testing.T) {
 		{"empty list members", []string{",a,, b ,"}, []string{"a", "b"}},
 		{"one empty line among others", []string{"", "a"}, []string{"a"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			names, err := ParseAccessControlRequestHeaders(test.values)
 			require.NoError(t, err)
@@ -148,7 +149,7 @@ func TestParseAccessControlRequestHeadersRejectsInvalidValues(t *testing.T) {
 		{"obs-text", []string{"a\xff"}},
 		{"invalid second line", []string{"a", "b c"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			names, err := ParseAccessControlRequestHeaders(test.values)
 			require.ErrorIs(t, err, ErrInvalidAccessControlRequestHeaders)

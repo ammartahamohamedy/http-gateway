@@ -1,6 +1,7 @@
 package fields
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -22,7 +23,7 @@ func TestValidateContentEncoding(t *testing.T) {
 		{"repeated field lines form one list", []string{"gzip", "br"}},
 		{"empty list members", []string{",gzip,, br ,"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.NoError(t, ValidateContentEncoding(test.values))
 		})
@@ -45,7 +46,7 @@ func TestValidateContentEncodingRejectsInvalidValues(t *testing.T) {
 		{"NUL", []string{"gzip\x00"}},
 		{"invalid second line", []string{"gzip", "b r"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.ErrorIs(t, ValidateContentEncoding(test.values), ErrInvalidContentEncoding)
 		})
@@ -72,7 +73,7 @@ func TestValidateAcceptEncoding(t *testing.T) {
 		{"repeated field lines form one list", []string{"gzip", "br;q=0"}},
 		{"empty list members", []string{",gzip,, br ,"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.NoError(t, ValidateAcceptEncoding(test.values))
 		})
@@ -103,7 +104,7 @@ func TestValidateAcceptEncodingRejectsInvalidValues(t *testing.T) {
 		{"NUL", []string{"gzip\x00"}},
 		{"invalid second line", []string{"gzip", "b r"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.ErrorIs(t, ValidateAcceptEncoding(test.values), ErrInvalidAcceptEncoding)
 		})

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"slices"
 	"strings"
 	"testing"
 	"testing/iotest"
@@ -60,7 +61,7 @@ func TestReadRequestLeadingEmptyLines(t *testing.T) {
 }
 
 func TestReadRequest(t *testing.T) {
-	for _, test := range []struct {
+	for test := range slices.Values([]struct {
 		name   string
 		reader io.Reader
 	}{
@@ -68,7 +69,7 @@ func TestReadRequest(t *testing.T) {
 		{"leading empty lines", strings.NewReader("\r\n\r\nGET / HTTP/1.1\r\nHost: example.com\r\n\r\n")},
 		{"one byte per read", iotest.OneByteReader(strings.NewReader("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"))},
 		{"data with EOF", iotest.DataErrReader(strings.NewReader("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"))},
-	} {
+	}) {
 		t.Run(test.name, func(t *testing.T) {
 			request, err := ReadRequest(bufio.NewReaderSize(test.reader, 16))
 			require.NoError(t, err)
@@ -127,7 +128,7 @@ func TestReadRequestValidatesHost(t *testing.T) {
 		{"malformed IPv6", "GET / HTTP/1.1", "Host: [2001:db8::g]", "", fields.ErrInvalidHost},
 		{"fold inside authority", "GET / HTTP/1.1", "Host: example.\r\n com", "", fields.ErrInvalidHost},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			section := "\r\n"
 			if test.headers != "" {
@@ -172,7 +173,7 @@ func TestReadRequestValidatesContentLength(t *testing.T) {
 		{"conflicting comma list", "Content-Length: 4, 5\r\n", nil, fields.ErrInvalidContentLength},
 		{"overflow", "Content-Length: 9223372036854775808\r\n", nil, fields.ErrInvalidContentLength},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			const remainder = "body\x00bytes\r\n"
 			raw := "POST / HTTP/1.1\r\nHost: example.com\r\n" + test.headerLines + "\r\n" + remainder
@@ -194,11 +195,11 @@ func TestReadRequestValidatesContentLength(t *testing.T) {
 }
 
 func TestReadRequestRejectsInvalidRequestLine(t *testing.T) {
-	for _, rawLine := range []string{
+	for rawLine := range slices.Values([]string{
 		"GET  HTTP/1.1",
 		"GE/T / HTTP/1.1",
 		"GET / HTTP/1.0",
-	} {
+	}) {
 		t.Run(rawLine, func(t *testing.T) {
 			_, parseErr := parseRequestLine(rawLine)
 			require.Error(t, parseErr)
@@ -232,7 +233,7 @@ func TestReadRequestErrors(t *testing.T) {
 		{"header line limit", strings.NewReader("GET / HTTP/1.1\r\nX:" + strings.Repeat("a", requestHeaderLimits.LineBytes) + "\r\n"), header.ErrLineTooLong},
 		{"header count limit", strings.NewReader("GET / HTTP/1.1\r\n" + strings.Repeat("X: a\r\n", requestHeaderLimits.Fields+1) + "\r\n"), header.ErrTooManyFields},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			request, err := ReadRequest(bufio.NewReader(test.reader))
 			require.ErrorIs(t, err, test.want)
@@ -296,14 +297,14 @@ func TestReadRequestHeadersAndUnfolding(t *testing.T) {
 		"x-bytes":    {"\x80\xff\xc3"},
 		"set-cookie": {"a=1; Expires=Wed, 09 Jun 2027 10:18:14 GMT", "b=2"},
 	}
-	for _, test := range []struct {
+	for test := range slices.Values([]struct {
 		name   string
 		reader io.Reader
 	}{
 		{"buffered", strings.NewReader(message)},
 		{"one byte per read", iotest.OneByteReader(strings.NewReader(message))},
 		{"data with EOF", iotest.DataErrReader(strings.NewReader(message))},
-	} {
+	}) {
 		t.Run(test.name, func(t *testing.T) {
 			reader := bufio.NewReaderSize(test.reader, 16)
 			request, err := ReadRequest(reader)
@@ -333,7 +334,7 @@ func TestReadRequestHeaderFragmentation(t *testing.T) {
 }
 
 func TestReadRequestRejectsMalformedHeaders(t *testing.T) {
-	for _, section := range []string{
+	for section := range slices.Values([]string{
 		"Host : example.com\r\n\r\n",
 		"Missing-Colon\r\n\r\n",
 		": value\r\n\r\n",
@@ -345,7 +346,7 @@ func TestReadRequestRejectsMalformedHeaders(t *testing.T) {
 		"X: ok\n\r\n",
 		"X: bad\rvalue\r\n\r\n",
 		"X: ok\r\n\n",
-	} {
+	}) {
 		t.Run(fmt.Sprintf("%q", section), func(t *testing.T) {
 			request, err := ReadRequest(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\n" + section)))
 			require.Error(t, err)

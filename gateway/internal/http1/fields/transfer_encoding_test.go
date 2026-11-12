@@ -1,6 +1,7 @@
 package fields
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func TestParseTransferEncoding(t *testing.T) {
 		{"quoted parameter with escape", []string{`x;a="\",chunked", chunked`}, []string{"x", "chunked"}},
 		{"empty quoted parameter", []string{`x;a="", chunked`}, []string{"x", "chunked"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			codings, err := ParseTransferEncoding(test.values)
 			require.NoError(t, err)
@@ -71,7 +72,7 @@ func TestParseTransferEncodingRejectsInvalidValues(t *testing.T) {
 		{"text after quoted parameter", []string{`x;a="1"b, chunked`}},
 		{"control byte in quoted parameter", []string{"x;a=\"\x01\", chunked"}},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			codings, err := ParseTransferEncoding(test.values)
 			require.ErrorIs(t, err, ErrInvalidTransferEncoding)
@@ -85,4 +86,27 @@ func TestParseTransferEncodingKeepsInput(t *testing.T) {
 	_, err := ParseTransferEncoding(values)
 	require.NoError(t, err)
 	require.Equal(t, []string{"GZIP", "Chunked"}, values)
+}
+
+func TestCheckTransferCodingSupport(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		want   error
+	}{
+		{"no transfer coding", nil, nil},
+		{"chunked", []string{"ChUnKeD"}, nil},
+		{"listed but unsupported", []string{"GZIP, chunked"}, ErrUnsupportedTransferCoding},
+		{"deprecated alias", []string{"x-gzip, chunked"}, ErrUnsupportedTransferCoding},
+		{"withdrawn name", []string{"identity, chunked"}, ErrUnsupportedTransferCoding},
+		{"reserved name", []string{"trailers, chunked"}, ErrUnsupportedTransferCoding},
+		{"unlisted", []string{"x-custom, chunked"}, ErrUnknownTransferCoding},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			codings, err := ParseTransferEncoding(test.values)
+			require.NoError(t, err)
+			require.ErrorIs(t, CheckTransferCodingSupport(codings), test.want)
+		})
+	}
 }

@@ -32,12 +32,12 @@ var protectedConnectionOptions = []string{"host", "content-length", "transfer-en
 // connection persistence. The input is not changed.
 func ParseConnection(values []string) ([]string, error) {
 	var options []string
-	for _, value := range values {
+	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
 			return nil, ErrInvalidConnection
 		}
-		for _, member := range members {
+		for member := range slices.Values(members) {
 			if !grammar.IsToken(member) {
 				return nil, ErrInvalidConnection
 			}
@@ -51,7 +51,7 @@ func ParseConnection(values []string) ([]string, error) {
 // routing or framing field, whether or not the request carries that field. It
 // expects lowercase options. Errors match ErrProtectedConnectionOption.
 func ValidateConnectionOptions(options []string) error {
-	for _, option := range options {
+	for option := range slices.Values(options) {
 		if slices.Contains(protectedConnectionOptions, option) {
 			return ErrProtectedConnectionOption
 		}

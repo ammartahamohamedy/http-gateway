@@ -3,6 +3,7 @@ package fields
 import (
 	"errors"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
@@ -79,12 +80,12 @@ func ParseAccessControlRequestHeaders(values []string) ([]string, error) {
 		return nil, nil
 	}
 	var names []string
-	for _, value := range values {
+	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
 			return nil, ErrInvalidAccessControlRequestHeaders
 		}
-		for _, member := range members {
+		for member := range slices.Values(members) {
 			if !grammar.IsToken(member) {
 				return nil, ErrInvalidAccessControlRequestHeaders
 			}

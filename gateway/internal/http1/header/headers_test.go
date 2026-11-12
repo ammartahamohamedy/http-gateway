@@ -3,6 +3,8 @@ package header
 import (
 	"bufio"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -28,7 +30,7 @@ func TestHeadersValues(t *testing.T) {
 		{"nil headers", nil, "X-Test", nil},
 		{"empty headers", Headers{}, "X-Test", nil},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.Equal(t, test.want, test.headers.Values(test.query))
 		})
@@ -61,7 +63,7 @@ func TestParseHeaderField(t *testing.T) {
 		{"opaque bytes", "X-Test: \x80\xff\xc3", "X-Test", "\x80\xff\xc3"},
 		{"Unicode whitespace preserved", "X-Test: \u00a0value\u00a0 ", "X-Test", "\u00a0value\u00a0"},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			name, value, err := parseHeaderField(test.rawLine)
 			require.NoError(t, err)
@@ -92,7 +94,7 @@ func TestParseHeaderFieldRejectsMalformedInput(t *testing.T) {
 		{"folded value", "X-Test: a\r\n b"},
 		{"quoted control", "X-Test: \"a\x0bb\""},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			name, value, err := parseHeaderField(test.rawLine)
 			require.Error(t, err)
@@ -150,7 +152,7 @@ func TestReadHeadersSectionLimits(t *testing.T) {
 		{"oversized continuation", "X: a\r\n " + strings.Repeat("b", testLimits.LineBytes) + "\r\n\r\n", 0, ErrLineTooLong},
 		{"continuations use section budget", "X: a\r\n" + strings.Repeat(" \t\r\n", testLimits.SectionBytes/4), 0, ErrSectionTooLarge},
 	}
-	for _, test := range tests {
+	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			headers, err := ReadHeadersSection(bufio.NewReaderSize(strings.NewReader(test.section), 16), testLimits)
 			if test.wantErr != nil {
@@ -160,7 +162,7 @@ func TestReadHeadersSectionLimits(t *testing.T) {
 			}
 			require.NoError(t, err)
 			count := 0
-			for _, values := range headers {
+			for values := range maps.Values(headers) {
 				count += len(values)
 			}
 			require.Equal(t, test.count, count)

@@ -1,6 +1,7 @@
 package http1
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,7 +14,7 @@ func TestParseHTTPVersion(t *testing.T) {
 }
 
 func TestParseHTTPVersionRejectsMalformedTokens(t *testing.T) {
-	for _, rawVersion := range []string{
+	for rawVersion := range slices.Values([]string{
 		"",
 		"1.1",
 		"http/1.1",
@@ -27,7 +28,7 @@ func TestParseHTTPVersionRejectsMalformedTokens(t *testing.T) {
 		"HTTP/1.1\r\n",
 		"HTTP/1.1\nextra",
 		"HTTP/1.\xff",
-	} {
+	}) {
 		t.Run(rawVersion, func(t *testing.T) {
 			version, err := parseHTTPVersion(rawVersion)
 			require.ErrorContains(t, err, "invalid HTTP version")
@@ -37,7 +38,7 @@ func TestParseHTTPVersionRejectsMalformedTokens(t *testing.T) {
 }
 
 func TestParseHTTPVersionRejectsUnsupportedVersions(t *testing.T) {
-	for _, rawVersion := range []string{"HTTP/1.0", "HTTP/2.0", "HTTP/9.9"} {
+	for rawVersion := range slices.Values([]string{"HTTP/1.0", "HTTP/2.0", "HTTP/9.9"}) {
 		t.Run(rawVersion, func(t *testing.T) {
 			version, err := parseHTTPVersion(rawVersion)
 			require.ErrorContains(t, err, "unsupported HTTP version")

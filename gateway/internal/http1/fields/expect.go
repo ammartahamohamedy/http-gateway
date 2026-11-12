@@ -33,12 +33,12 @@ var (
 // match ErrInvalidExpect and return nil. The input is not changed.
 func ParseExpect(values []string) ([]string, error) {
 	var expectations []string
-	for _, value := range values {
+	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
 			return nil, ErrInvalidExpect
 		}
-		for _, member := range members {
+		for member := range slices.Values(members) {
 			expectation, ok := parseExpectation(member)
 			if !ok {
 				return nil, ErrInvalidExpect
@@ -78,7 +78,7 @@ func parseExpectation(member string) (string, bool) {
 	if !grammar.IsToken(value) && !grammar.IsQuotedString(value) {
 		return "", false
 	}
-	for _, parameter := range parameters {
+	for parameter := range slices.Values(parameters) {
 		parameter = grammar.TrimOWS(parameter)
 		if parameter != "" && !grammar.IsParameter(parameter) {
 			return "", false
