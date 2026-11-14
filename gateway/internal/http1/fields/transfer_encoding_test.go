@@ -96,7 +96,11 @@ func TestCheckTransferCodingSupport(t *testing.T) {
 	}{
 		{"no transfer coding", nil, nil},
 		{"chunked", []string{"ChUnKeD"}, nil},
-		{"listed but unsupported", []string{"GZIP, chunked"}, ErrUnsupportedTransferCoding},
+		{"gzip", []string{"GZIP, chunked"}, nil},
+		{"deflate", []string{"Deflate, chunked"}, nil},
+		{"stacked supported codings", []string{"gzip, deflate, chunked"}, nil},
+		{"listed but unsupported", []string{"compress, chunked"}, ErrUnsupportedTransferCoding},
+		{"unsupported after supported", []string{"gzip, compress, chunked"}, ErrUnsupportedTransferCoding},
 		{"deprecated alias", []string{"x-gzip, chunked"}, ErrUnsupportedTransferCoding},
 		{"withdrawn name", []string{"identity, chunked"}, ErrUnsupportedTransferCoding},
 		{"reserved name", []string{"trailers, chunked"}, ErrUnsupportedTransferCoding},

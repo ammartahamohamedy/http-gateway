@@ -23,6 +23,10 @@ var ianaTransferCodingNames = []string{
 	"x-gzip",     // deprecated alias for gzip
 }
 
+// supportedTransferCodings lists the transfer codings the gateway accepts.
+// "deflate" is the zlib format, not raw deflate (RFC 9110, Section 8.4.1.2).
+var supportedTransferCodings = []string{"chunked", "gzip", "deflate"}
+
 var (
 	// ErrInvalidTransferEncoding reports a malformed Transfer-Encoding list, or
 	// one whose codings do not end in exactly one parameterless chunked.
@@ -80,12 +84,12 @@ func ParseTransferEncoding(values []string) ([]string, error) {
 }
 
 // CheckTransferCodingSupport checks the lowercase names from ParseTransferEncoding
-// after framing validation. The gateway accepts chunked as its only transfer
-// coding. The first other name returns ErrUnsupportedTransferCoding if listed in
-// the IANA registry, or ErrUnknownTransferCoding otherwise. It reads no body data.
+// after framing validation. The gateway accepts chunked, gzip, and deflate. The
+// first other name returns ErrUnsupportedTransferCoding if listed in the IANA
+// registry, or ErrUnknownTransferCoding otherwise. It reads no body data.
 func CheckTransferCodingSupport(codings []string) error {
 	for coding := range slices.Values(codings) {
-		if coding == "chunked" {
+		if slices.Contains(supportedTransferCodings, coding) {
 			continue
 		}
 		if slices.Contains(ianaTransferCodingNames, coding) {
