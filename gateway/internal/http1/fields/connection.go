@@ -18,16 +18,15 @@ var (
 	ErrProtectedConnectionOption = errors.New("http1: Connection must not nominate routing or framing fields")
 )
 
-// protectedConnectionOptions lists the lowercase names of the routing and
-// framing fields that a message must not nominate. Host appears only in
-// requests, but nominating it is rejected in either message.
+// protectedConnectionOptions lists the routing and framing fields a message must
+// not nominate. Host is request-only but rejected in either message.
 var protectedConnectionOptions = []string{"host", "content-length", "transfer-encoding"}
 
-// ParseConnection returns a request's or response's connection options in
-// received order, lowercased because they are case-insensitive (RFC 9110,
-// Section 7.6.1). Values must have surrounding SP/HTAB already removed. Repeated
-// field lines form one list, and empty members are ignored (RFC 9110, Section
-// 5.6.1), so an absent or empty field returns nil options. Every member must be a token; unfamiliar
+// ParseConnection returns a message's connection options in received order,
+// lowercased because they are case-insensitive (RFC 9110, Section 7.6.1). Values
+// must have surrounding SP/HTAB already removed. Repeated field lines form one
+// list, and empty members are ignored (RFC 9110, Section 5.6.1), so an absent or
+// empty field returns nil options. Every member must be a token; unfamiliar
 // options are accepted. Errors match ErrInvalidConnection and return nil options.
 // This function does not apply options, remove nominated fields, or decide
 // connection persistence. The input is not changed.

@@ -1,3 +1,3 @@
-// Package body reads HTTP/1.1 message bodies using framing decided by the
-// request and response readers.
+// Package body handles HTTP/1.1 message bodies from plain framing inputs,
+// independent of the parent http1 message types.
 package body

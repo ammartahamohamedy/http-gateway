@@ -9,9 +9,8 @@ import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
 )
 
-// ianaTransferCodingNames lists the HTTP Transfer Coding Registry entries,
-// including its withdrawn and reserved names. Its deprecated aliases are in
-// transferCodingAliases instead, since ParseTransferEncoding replaces them.
+// ianaTransferCodingNames lists the HTTP Transfer Coding Registry names, except
+// the deprecated aliases that ParseTransferEncoding replaces.
 // https://www.iana.org/assignments/http-parameters/http-parameters.xhtml#transfer-coding
 var ianaTransferCodingNames = []string{
 	"chunked",
@@ -22,24 +21,24 @@ var ianaTransferCodingNames = []string{
 	"trailers", // reserved for TE
 }
 
-// transferCodingAliases maps the registry's deprecated names to the codings
-// that recipients should treat them as (RFC 9112, Section 7.2).
+// transferCodingAliases maps deprecated names to their equivalents (RFC 9112,
+// Section 7.2).
 var transferCodingAliases = map[string]string{
 	"x-compress": "compress",
 	"x-gzip":     "gzip",
 }
 
-// supportedTransferCodings lists the transfer codings the gateway accepts.
-// "deflate" is the zlib format, not raw deflate (RFC 9110, Section 8.4.1.2).
+// supportedTransferCodings lists the accepted transfer codings. "deflate" is the
+// zlib format (RFC 9110, Section 8.4.1.2).
 var supportedTransferCodings = []string{"chunked", "gzip", "deflate"}
 
 var (
-	// ErrInvalidTransferEncoding reports a malformed Transfer-Encoding list, a
-	// chunked coding with parameters, or chunked applied more than once.
+	// ErrInvalidTransferEncoding reports a malformed list, or chunked with
+	// parameters or applied more than once.
 	ErrInvalidTransferEncoding = errors.New("http1: Transfer-Encoding requires a valid coding list applying chunked at most once")
 
-	// ErrChunkedNotFinal reports a request whose transfer codings do not end in
-	// chunked, so its body length cannot be determined (RFC 9112, Section 6.3).
+	// ErrChunkedNotFinal reports request codings not ending in chunked, which leave
+	// the length undetermined (RFC 9112, Section 6.3).
 	ErrChunkedNotFinal = errors.New("http1: request Transfer-Encoding must end in chunked")
 
 	// ErrUnsupportedTransferCoding reports a registry name the gateway cannot decode.
@@ -48,29 +47,22 @@ var (
 	// ErrUnknownTransferCoding reports a name absent from the transfer coding registry.
 	ErrUnknownTransferCoding = errors.New("http1: unknown transfer coding")
 
-	// ErrFramingConflict reports a message carrying both Transfer-Encoding and
-	// Content-Length, whose disagreement enables request smuggling or response
-	// splitting (RFC 9112, Section 6.3). The request cross-check rejects every
-	// such request.
+	// ErrFramingConflict reports a message with both Transfer-Encoding and
+	// Content-Length, a smuggling and splitting vector (RFC 9112, Section 6.3).
 	ErrFramingConflict = errors.New("http1: message must not combine Transfer-Encoding and Content-Length")
 )
 
-// ParseTransferEncoding returns a request's or response's transfer-coding names
-// in the order they were applied, lowercased, or nil when the field is absent.
-// The deprecated names x-gzip and x-compress are returned as gzip and compress
-// (RFC 9112, Section 7.2). Values must have surrounding SP/HTAB already removed.
-// Repeated field lines form one list, and empty list members are ignored (RFC
-// 9110, Section 5.6.1).
+// ParseTransferEncoding returns a message's transfer-coding names in applied
+// order, lowercased, with x-gzip and x-compress replaced by gzip and compress (RFC
+// 9112, Section 7.2); nil when absent. Values must have surrounding SP/HTAB
+// already removed. Repeated field lines form one list, and empty members are
+// ignored (RFC 9110, Section 5.6.1).
 //
-// Chunked may be applied at most once and takes no parameters (RFC 9112,
-// Sections 6.1 and 7). Its position is checked by the caller: a request must
-// end in chunked (ValidateRequestTransferCodings), while a response that does
-// not is delimited by closing the connection (RFC 9112, Section 6.3). Other
-// codings need only be syntactically valid, and their parameters are checked
-// but not returned. Decoder support is checked separately by
-// CheckTransferCodingSupport. This function does not check Content-Length
-// conflicts. Errors match ErrInvalidTransferEncoding and return nil codings. The
-// input is not changed.
+// Chunked may appear at most once, without parameters (RFC 9112, Sections 6.1 and
+// 7); callers check its position, as ValidateRequestTransferCodings does. Other
+// codings need only valid syntax; their parameters are checked, not returned.
+// Support and Content-Length conflicts are checked elsewhere. Errors match
+// ErrInvalidTransferEncoding and return nil codings. The input is not changed.
 func ParseTransferEncoding(values []string) ([]string, error) {
 	if len(values) == 0 {
 		return nil, nil
@@ -95,10 +87,8 @@ func ParseTransferEncoding(values []string) ([]string, error) {
 	return codings, nil
 }
 
-// ValidateRequestTransferCodings requires a request's codings from
-// ParseTransferEncoding to end in chunked, or the request's body length cannot be
-// determined (RFC 9112, Section 6.3). Responses have no such requirement.
-// Absence is valid. Errors match ErrChunkedNotFinal.
+// ValidateRequestTransferCodings requires request codings to end in chunked
+// (RFC 9112, Section 6.3). Absence is valid. Errors match ErrChunkedNotFinal.
 func ValidateRequestTransferCodings(codings []string) error {
 	if len(codings) > 0 && codings[len(codings)-1] != "chunked" {
 		return ErrChunkedNotFinal
@@ -123,10 +113,10 @@ func CheckTransferCodingSupport(codings []string) error {
 	return nil
 }
 
-// parseTransferCoding validates one list member, a token followed by optional
-// ";"-separated parameters, and returns its lowercase name with deprecated
-// aliases replaced. The token check comes first so lowercasing cannot fold a
-// non-ASCII rune into "chunked".
+// parseTransferCoding validates one list member, a token with optional
+// ";"-separated parameters, and returns its lowercase name, aliases replaced. The
+// token check comes first so lowercasing cannot fold a non-ASCII rune into
+// "chunked".
 func parseTransferCoding(member string) (string, bool) {
 	parts, ok := grammar.SplitUnquoted(member, ';')
 	if !ok {
