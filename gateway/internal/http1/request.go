@@ -45,7 +45,8 @@ var ErrTooManyLeadingEmptyLines = errors.New("http1: too many empty lines before
 type RequestLine struct {
 	Method        string
 	RequestTarget string
-	// Version is the numeric protocol version, such as "1.1".
+	// Version is the protocol version the request is processed as, always
+	// "1.1": higher HTTP/1 minor versions are processed as 1.1.
 	Version string
 }
 
@@ -83,9 +84,10 @@ func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
 }
 
 // parseRequestLine parses line contents without a CRLF terminator. It requires
-// exactly three nonempty components separated by single spaces and supports
-// HTTP/1.1. Method case and request-target encoding are preserved, and Version
-// contains the version number "1.1". It does not check whether a method is
+// exactly three nonempty components separated by single spaces. It supports
+// HTTP/1.1 and processes higher HTTP/1 minor versions as 1.1; HTTP/1.0 is
+// rejected as local policy. Method case and request-target encoding are
+// preserved, and Version contains "1.1". It does not check whether a method is
 // implemented by the server. This function does not enforce a size limit;
 // ReadRequest applies the input limit before calling it. Direct callers
 // are responsible for bounding input when a size limit is required.
@@ -114,6 +116,9 @@ func parseRequestLine(rawLine string) (RequestLine, error) {
 	versionNumber, err := parseHTTPVersion(version)
 	if err != nil {
 		return RequestLine{}, err
+	}
+	if versionNumber != "1.1" {
+		return RequestLine{}, fmt.Errorf("http1: unsupported HTTP version %q", version)
 	}
 
 	return RequestLine{

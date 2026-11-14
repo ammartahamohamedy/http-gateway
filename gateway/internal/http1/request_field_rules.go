@@ -29,6 +29,9 @@ func applyTransferEncodingRule(values []string, _ RequestLine, out *RequestField
 	if err != nil {
 		return err
 	}
+	if err := fields.ValidateRequestTransferCodings(codings); err != nil {
+		return err
+	}
 	out.TransferCodings = codings
 	return nil
 }

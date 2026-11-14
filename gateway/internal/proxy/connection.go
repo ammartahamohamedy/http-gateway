@@ -41,8 +41,8 @@ func HandleConnection(connection net.Conn) {
 	}
 	if err != nil {
 		// TODO: Match wrapped errors with errors.Is and respond before closing:
-		// 400 for fields.ErrInvalidTransferEncoding; 501 for unsupported or
-		// unknown transfer codings.
+		// 400 for fields.ErrInvalidTransferEncoding and fields.ErrChunkedNotFinal;
+		// 501 for unsupported or unknown transfer codings.
 		log.Printf("reading request: %v", err)
 		return
 	}

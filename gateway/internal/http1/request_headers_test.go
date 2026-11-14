@@ -130,13 +130,25 @@ func TestRequestCrossChecksRunAfterFieldRules(t *testing.T) {
 }
 
 func TestTransferEncodingErrors(t *testing.T) {
-	headers := header.Headers{"host": {"example.com"}, "transfer-encoding": {"gzip"}}
-	parsed, err := processRequestFields(originLine, headers)
-	require.ErrorIs(t, err, fields.ErrInvalidTransferEncoding)
-	require.Zero(t, parsed)
-	var fieldErr *FieldError
-	require.ErrorAs(t, err, &fieldErr)
-	require.Equal(t, "Transfer-Encoding", fieldErr.Name)
+	tests := []struct {
+		name  string
+		value string
+		want  error
+	}{
+		{"malformed list", "chun ked", fields.ErrInvalidTransferEncoding},
+		{"chunked not final", "gzip", fields.ErrChunkedNotFinal},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			headers := header.Headers{"host": {"example.com"}, "transfer-encoding": {test.value}}
+			parsed, err := processRequestFields(originLine, headers)
+			require.ErrorIs(t, err, test.want)
+			require.Zero(t, parsed)
+			var fieldErr *FieldError
+			require.ErrorAs(t, err, &fieldErr)
+			require.Equal(t, "Transfer-Encoding", fieldErr.Name)
+		})
+	}
 }
 
 func TestFramingConflict(t *testing.T) {
@@ -161,10 +173,23 @@ func TestFramingConflict(t *testing.T) {
 	}
 }
 
-func TestMalformedTransferEncodingPrecedesFramingConflict(t *testing.T) {
-	headers := header.Headers{"host": {"example.com"}, "content-length": {"5"}, "transfer-encoding": {"xchunked"}}
-	_, err := processRequestFields(originLine, headers)
-	require.ErrorIs(t, err, fields.ErrInvalidTransferEncoding)
+func TestInvalidTransferEncodingPrecedesFramingConflict(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+		want  error
+	}{
+		{"malformed list", "chun ked", fields.ErrInvalidTransferEncoding},
+		{"chunked not final", "xchunked", fields.ErrChunkedNotFinal},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			headers := header.Headers{"host": {"example.com"}, "content-length": {"5"}, "transfer-encoding": {test.value}}
+			_, err := processRequestFields(originLine, headers)
+			require.ErrorIs(t, err, test.want)
+			require.NotErrorIs(t, err, fields.ErrFramingConflict)
+		})
+	}
 }
 
 func TestReadRequestRejectsFramingConflict(t *testing.T) {

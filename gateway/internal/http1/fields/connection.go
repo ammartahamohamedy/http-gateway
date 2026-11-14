@@ -19,14 +19,15 @@ var (
 )
 
 // protectedConnectionOptions lists the lowercase names of the routing and
-// framing fields that a request must not nominate.
+// framing fields that a message must not nominate. Host appears only in
+// requests, but nominating it is rejected in either message.
 var protectedConnectionOptions = []string{"host", "content-length", "transfer-encoding"}
 
-// ParseConnection returns the request's connection options in received order,
-// lowercased because they are case-insensitive (RFC 9110, Section 7.6.1). Values
-// must have surrounding SP/HTAB already removed. Repeated field lines form one
-// list, and empty members are ignored (RFC 9110, Section 5.6.1), so an absent or
-// empty field returns nil options. Every member must be a token; unfamiliar
+// ParseConnection returns a request's or response's connection options in
+// received order, lowercased because they are case-insensitive (RFC 9110,
+// Section 7.6.1). Values must have surrounding SP/HTAB already removed. Repeated
+// field lines form one list, and empty members are ignored (RFC 9110, Section
+// 5.6.1), so an absent or empty field returns nil options. Every member must be a token; unfamiliar
 // options are accepted. Errors match ErrInvalidConnection and return nil options.
 // This function does not apply options, remove nominated fields, or decide
 // connection persistence. The input is not changed.
@@ -48,7 +49,7 @@ func ParseConnection(values []string) ([]string, error) {
 }
 
 // ValidateConnectionOptions rejects options from ParseConnection that nominate a
-// routing or framing field, whether or not the request carries that field. It
+// routing or framing field, whether or not the message carries that field. It
 // expects lowercase options. Errors match ErrProtectedConnectionOption.
 func ValidateConnectionOptions(options []string) error {
 	for option := range slices.Values(options) {

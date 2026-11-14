@@ -23,8 +23,8 @@ type RequestFields struct {
 	ContentLengthPresent bool
 
 	// TransferCodings lists the lowercase Transfer-Encoding codings in applied
-	// order, ending in chunked; it is nil when the field is absent. Listing a
-	// coding does not mean the gateway can decode it.
+	// order, with deprecated aliases replaced, ending in chunked; it is nil when
+	// the field is absent. Listing a coding does not mean the gateway can decode it.
 	TransferCodings []string
 
 	// ConnectionOptions lists the lowercase Connection options in received order.

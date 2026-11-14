@@ -28,6 +28,12 @@ func TestParseTransferEncoding(t *testing.T) {
 		{"quoted parameter hides separators", []string{`x;a="1,2;3=4", chunked`}, []string{"x", "chunked"}},
 		{"quoted parameter with escape", []string{`x;a="\",chunked", chunked`}, []string{"x", "chunked"}},
 		{"empty quoted parameter", []string{`x;a="", chunked`}, []string{"x", "chunked"}},
+		{"chunked inside quoted parameter is not a coding", []string{`x;a="1, chunked"`}, []string{"x"}},
+		{"final coding need not be chunked", []string{"gzip"}, []string{"gzip"}},
+		{"chunked before another coding", []string{"chunked, gzip"}, []string{"chunked", "gzip"}},
+		{"chunked first across lines", []string{"chunked", "gzip"}, []string{"chunked", "gzip"}},
+		{"deprecated gzip alias", []string{"X-Gzip, chunked"}, []string{"gzip", "chunked"}},
+		{"deprecated compress alias", []string{"x-compress, chunked"}, []string{"compress", "chunked"}},
 	}
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
@@ -45,11 +51,9 @@ func TestParseTransferEncodingRejectsInvalidValues(t *testing.T) {
 	}{
 		{"empty value", []string{""}},
 		{"only commas", []string{" , , "}},
-		{"final coding not chunked", []string{"gzip"}},
-		{"chunked before another coding", []string{"chunked, gzip"}},
 		{"chunked twice", []string{"chunked, chunked"}},
 		{"chunked twice across lines", []string{"chunked", "chunked"}},
-		{"chunked first across lines", []string{"chunked", "gzip"}},
+		{"chunked twice around another coding", []string{"chunked, gzip, chunked"}},
 		{"chunked with parameter", []string{"chunked;a=b"}},
 		{"chunked with empty parameter", []string{"chunked;"}},
 		{"space inside name", []string{"chun ked"}},
@@ -63,7 +67,6 @@ func TestParseTransferEncodingRejectsInvalidValues(t *testing.T) {
 		{"CR smuggled in name", []string{"chunked\r"}},
 		{"quoted name", []string{`"chunked"`}},
 		{"unterminated quoted parameter", []string{`x;a="1, chunked`}},
-		{"chunked hidden in quoted parameter", []string{`x;a="1, chunked"`}},
 		{"parameter without equals", []string{"x;a, chunked"}},
 		{"parameter without name", []string{"x;=b, chunked"}},
 		{"parameter without value", []string{"x;a=, chunked"}},
@@ -88,6 +91,25 @@ func TestParseTransferEncodingKeepsInput(t *testing.T) {
 	require.Equal(t, []string{"GZIP", "Chunked"}, values)
 }
 
+func TestValidateRequestTransferCodings(t *testing.T) {
+	tests := []struct {
+		name    string
+		codings []string
+		want    error
+	}{
+		{"absent", nil, nil},
+		{"chunked", []string{"chunked"}, nil},
+		{"coding list ending in chunked", []string{"gzip", "chunked"}, nil},
+		{"final coding not chunked", []string{"gzip"}, ErrChunkedNotFinal},
+		{"chunked before another coding", []string{"chunked", "gzip"}, ErrChunkedNotFinal},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			require.ErrorIs(t, ValidateRequestTransferCodings(test.codings), test.want)
+		})
+	}
+}
+
 func TestCheckTransferCodingSupport(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -101,7 +123,8 @@ func TestCheckTransferCodingSupport(t *testing.T) {
 		{"stacked supported codings", []string{"gzip, deflate, chunked"}, nil},
 		{"listed but unsupported", []string{"compress, chunked"}, ErrUnsupportedTransferCoding},
 		{"unsupported after supported", []string{"gzip, compress, chunked"}, ErrUnsupportedTransferCoding},
-		{"deprecated alias", []string{"x-gzip, chunked"}, ErrUnsupportedTransferCoding},
+		{"deprecated gzip alias", []string{"x-gzip, chunked"}, nil},
+		{"deprecated compress alias", []string{"x-compress, chunked"}, ErrUnsupportedTransferCoding},
 		{"withdrawn name", []string{"identity, chunked"}, ErrUnsupportedTransferCoding},
 		{"reserved name", []string{"trailers, chunked"}, ErrUnsupportedTransferCoding},
 		{"unlisted", []string{"x-custom, chunked"}, ErrUnknownTransferCoding},

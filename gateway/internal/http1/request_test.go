@@ -29,6 +29,7 @@ func TestParseRequestLine(t *testing.T) {
 		{"method case preserved", "get / HTTP/1.1", "get", "/"},
 		{"extension method", "CUSTOM-42 / HTTP/1.1", "CUSTOM-42", "/"},
 		{"method token characters", "M!#$%&'*+-.^_`|~09 / HTTP/1.1", "M!#$%&'*+-.^_`|~09", "/"},
+		{"higher minor version processed as 1.1", "GET / HTTP/1.2", "GET", "/"},
 	}
 
 	for test := range slices.Values(tests) {
