@@ -87,3 +87,23 @@ func TestValidateExpectContent(t *testing.T) {
 	require.NoError(t, ValidateExpectContent([]string{"100-continue"}, true))
 	require.ErrorIs(t, ValidateExpectContent([]string{"x-custom", "100-continue"}, false), ErrExpectWithoutContent)
 }
+
+func TestCheckExpectationSupport(t *testing.T) {
+	tests := []struct {
+		name         string
+		expectations []string
+		want         error
+	}{
+		{"none", nil, nil},
+		{"100-continue", []string{"100-continue"}, nil},
+		{"repeated 100-continue", []string{"100-continue", "100-continue"}, nil},
+		{"unfamiliar", []string{"x-custom"}, ErrUnsupportedExpectation},
+		{"100-continue with value", []string{"100-continue=x"}, ErrUnsupportedExpectation},
+		{"unfamiliar after 100-continue", []string{"100-continue", "x-custom"}, ErrUnsupportedExpectation},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			require.ErrorIs(t, CheckExpectationSupport(test.expectations), test.want)
+		})
+	}
+}

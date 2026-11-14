@@ -107,14 +107,13 @@ func checkFramingConflict(_ RequestLine, _ header.Headers, parsed RequestFields)
 	return nil
 }
 
-// checkConnectionOptions rejects nominations of routing and framing fields,
-// which forwarding would otherwise have to remove.
+// checkConnectionOptions applies fields.ValidateConnectionOptions.
 func checkConnectionOptions(_ RequestLine, _ header.Headers, parsed RequestFields) error {
 	return fields.ValidateConnectionOptions(parsed.ConnectionOptions)
 }
 
-// checkExpectContent rejects 100-continue on a request with no content. Chunked
-// framing counts as content here, even though the gateway does not decode it.
+// checkExpectContent applies fields.ValidateExpectContent. Chunked framing counts
+// as content.
 func checkExpectContent(_ RequestLine, _ header.Headers, parsed RequestFields) error {
 	hasContent := parsed.ContentLength > 0 || len(parsed.TransferCodings) > 0
 	return fields.ValidateExpectContent(parsed.Expectations, hasContent)

@@ -12,9 +12,8 @@ var (
 	// ErrInvalidConnection reports a Connection list member that is not a token.
 	ErrInvalidConnection = errors.New("http1: Connection requires a list of option tokens")
 
-	// ErrProtectedConnectionOption reports a Connection option naming a routing
-	// or framing field. Proxies remove every field Connection nominates, so
-	// honoring one would strip a field that the next hop depends on.
+	// ErrProtectedConnectionOption reports a Connection option nominating a routing
+	// or framing field.
 	ErrProtectedConnectionOption = errors.New("http1: Connection must not nominate routing or framing fields")
 )
 
@@ -48,8 +47,10 @@ func ParseConnection(values []string) ([]string, error) {
 }
 
 // ValidateConnectionOptions rejects options from ParseConnection that nominate a
-// routing or framing field, whether or not the message carries that field. It
-// expects lowercase options. Errors match ErrProtectedConnectionOption.
+// routing or framing field, whether or not the message carries that field.
+// Forwarding removes every nominated field, so honoring one would strip a field
+// the next hop depends on. It expects lowercase options. Errors match
+// ErrProtectedConnectionOption.
 func ValidateConnectionOptions(options []string) error {
 	for option := range slices.Values(options) {
 		if slices.Contains(protectedConnectionOptions, option) {

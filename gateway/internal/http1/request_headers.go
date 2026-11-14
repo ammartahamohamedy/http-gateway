@@ -12,9 +12,7 @@ import (
 // as a read-only view; slice members share their backing arrays, so checks must
 // not modify them.
 type RequestFields struct {
-	// Authority is the effective request authority: the target's authority for
-	// CONNECT and absolute-form targets that have one, otherwise the Host value.
-	// It is preserved as received and never selects the backend destination.
+	// Authority is the effective request authority from fields.RequestAuthority.
 	Authority string
 
 	// ContentLength is meaningful only when ContentLengthPresent is true, which
@@ -22,29 +20,26 @@ type RequestFields struct {
 	ContentLength        int64
 	ContentLengthPresent bool
 
-	// TransferCodings lists the lowercase codings in applied order, aliases
-	// replaced, ending in chunked; nil when absent. Listing a coding does not mean
-	// the gateway can decode it.
+	// TransferCodings holds the codings from fields.ParseTransferEncoding, ending in
+	// chunked; nil when absent.
 	TransferCodings []string
 
-	// ConnectionOptions lists the lowercase Connection options in received order.
-	// Forwarding must remove the fields they nominate.
+	// ConnectionOptions holds the options from fields.ParseConnection; nil when
+	// absent.
 	ConnectionOptions []string
 
-	// Expectations lists the Expect members in received order, with names
-	// lowercased. Listing one does not mean the gateway can satisfy it.
+	// Expectations holds the members from fields.ParseExpect; nil when absent.
 	Expectations []string
 
-	// Origin is the Origin value as received, or empty when absent. It carries
-	// no trust: allowed origins are gateway policy.
+	// Origin is the value from fields.ParseOrigin, or empty when absent.
 	Origin string
 
-	// AccessControlRequestMethod is the requested method as received, or empty
-	// when absent. Recognizing a preflight is gateway policy.
+	// AccessControlRequestMethod is the value from
+	// fields.ParseAccessControlRequestMethod, or empty when absent.
 	AccessControlRequestMethod string
 
-	// AccessControlRequestHeaders lists the requested field names, lowercased,
-	// in received order.
+	// AccessControlRequestHeaders holds the names from
+	// fields.ParseAccessControlRequestHeaders; nil when absent.
 	AccessControlRequestHeaders []string
 }
 

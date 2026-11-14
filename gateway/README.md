@@ -11,7 +11,7 @@ the current executable parses only the request head as described below.
 
 ## Current usage
 
-The program parses one HTTP/1.1 request head (request-line and header section) per TCP connection, validates Host and Content-Length, applies the gateway's request-target policy, prints the request-line fields and effective authority, and closes the connection. Connections are handled one at a time. Bodies are not read, nothing is forwarded, and the server does not send an HTTP response.
+The program parses one HTTP/1.1 request per TCP connection: it validates the request head and its supported fields, applies the gateway's transfer-coding, request-target, and `Expect` policy, reads a Content-Length body of up to 1 MiB within 30 seconds (sending `100 Continue` when the client expects it), prints the request-line fields, effective authority, and body size, and closes the connection. Connections are handled one at a time. Chunked bodies are not decoded yet, nothing is forwarded, and the server sends no final HTTP response.
 
 The target policy accepts origin-form, `http`/`https` absolute-form, and `OPTIONS *`. It rejects CONNECT, other schemes, ports outside 1–65535, paths starting with `//`, and `.`/`..` segments, including percent-encoded ones.
 
@@ -55,6 +55,7 @@ Method: GET
 Request target: /hello?name=Gopher
 Version: 1.1
 Authority: example.com
+Body: 0 bytes
 Connection closed
 ```
 

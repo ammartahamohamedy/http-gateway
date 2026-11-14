@@ -97,9 +97,9 @@ func ValidateRequestTransferCodings(codings []string) error {
 }
 
 // CheckTransferCodingSupport checks the lowercase names from ParseTransferEncoding
-// after framing validation. The gateway accepts chunked, gzip, and deflate. The
-// first other name returns ErrUnsupportedTransferCoding if listed in the IANA
-// registry, or ErrUnknownTransferCoding otherwise. It reads no body data.
+// after framing validation against supportedTransferCodings. The first other
+// name returns ErrUnsupportedTransferCoding if listed in the IANA registry, or
+// ErrUnknownTransferCoding otherwise. It reads no body data.
 func CheckTransferCodingSupport(codings []string) error {
 	for coding := range slices.Values(codings) {
 		if slices.Contains(supportedTransferCodings, coding) {

@@ -26,10 +26,10 @@ func TestReadRequestSizeLimit(t *testing.T) {
 	require.NoError(t, err)
 	parsed, err := ReadRequest(bufio.NewReader(strings.NewReader(rawLine + "\r\nHost: example.com\r\n\r\n")))
 	require.NoError(t, err)
-	require.Equal(t, &Request{RequestLine: line, Headers: header.Headers{"host": {"example.com"}}, Fields: RequestFields{Authority: "example.com"}}, parsed)
+	require.Equal(t, &Request{RequestLine: line, Headers: header.Headers{"host": {"example.com"}}, Fields: RequestFields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
 	parsed, err = ReadRequest(bufio.NewReaderSize(strings.NewReader(rawLine+"\r\nHost: example.com\r\n\r\n"), maxRequestLineBytes+1))
 	require.NoError(t, err)
-	require.Equal(t, &Request{RequestLine: line, Headers: header.Headers{"host": {"example.com"}}, Fields: RequestFields{Authority: "example.com"}}, parsed)
+	require.Equal(t, &Request{RequestLine: line, Headers: header.Headers{"host": {"example.com"}}, Fields: RequestFields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
 	_, err = ReadRequest(bufio.NewReader(strings.NewReader(rawLine + "\r")))
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 
@@ -77,7 +77,7 @@ func TestReadRequest(t *testing.T) {
 				RequestLine: RequestLine{Method: "GET", RequestTarget: "/", Version: "1.1"},
 				Headers:     header.Headers{"host": {"example.com"}},
 				Fields:      RequestFields{Authority: "example.com"},
-			}, request)
+			}, requireEmptyBody(t, request))
 		})
 	}
 }
@@ -89,7 +89,7 @@ func TestReadRequestPreservesRemainingBytes(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, header.Headers{"host": {"example.com"}}, request.Headers)
 	require.Equal(t, []string{"example.com"}, request.Headers.Values("HOST"))
-	require.Nil(t, request.Body)
+	require.NotNil(t, request.Body)
 	remaining, err := io.ReadAll(reader)
 	require.NoError(t, err)
 	require.Equal(t, remainder, string(remaining))
@@ -162,7 +162,7 @@ func TestReadRequestValidatesContentLength(t *testing.T) {
 		{"positive", "Content-Length: 4\r\n", []string{"4"}, nil},
 		{"mixed case and whitespace", "cOnTeNt-LeNgTh:\t 4 \t\r\n", []string{"4"}, nil},
 		{"leading zeros preserved", "Content-Length: 0004\r\n", []string{"0004"}, nil},
-		{"maximum int64", "Content-Length: 9223372036854775807\r\n", []string{"9223372036854775807"}, nil},
+		{"maximum int64 exceeds body limit", "Content-Length: 9223372036854775807\r\n", nil, ErrRequestBodyTooLarge},
 		{"empty", "Content-Length:\r\n", nil, fields.ErrInvalidContentLength},
 		{"signed", "Content-Length: +4\r\n", nil, fields.ErrInvalidContentLength},
 		{"internal whitespace", "Content-Length: 4 2\r\n", nil, fields.ErrInvalidContentLength},
@@ -185,7 +185,7 @@ func TestReadRequestValidatesContentLength(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, test.wantValues, request.Headers.Values("Content-Length"))
-				require.Nil(t, request.Body)
+				require.NotNil(t, request.Body)
 			}
 			remaining, err := io.ReadAll(reader)
 			require.NoError(t, err)

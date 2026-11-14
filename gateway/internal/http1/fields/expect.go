@@ -2,6 +2,7 @@ package fields
 
 import (
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -18,6 +19,9 @@ var (
 	// ErrExpectWithoutContent reports 100-continue on a request with no content,
 	// where a client could wait for an interim response that has no purpose.
 	ErrExpectWithoutContent = errors.New("http1: Expect 100-continue requires request content")
+
+	// ErrUnsupportedExpectation reports an expectation the gateway cannot meet.
+	ErrUnsupportedExpectation = errors.New("http1: unsupported expectation")
 )
 
 // ParseExpect returns the request's expectations in received order, or nil when
@@ -29,8 +33,8 @@ var (
 // Section 10.1.1), so parameters require a value. Names are lowercased because
 // the field is case-insensitive; any value and parameters are kept as received,
 // which keeps 100-continue=x distinct from 100-continue. Unfamiliar expectations
-// are accepted here: whether they are refused is policy for the caller. Errors
-// match ErrInvalidExpect and return nil. The input is not changed.
+// are accepted here; CheckExpectationSupport checks support. Errors match
+// ErrInvalidExpect and return nil. The input is not changed.
 func ParseExpect(values []string) ([]string, error) {
 	var expectations []string
 	for value := range slices.Values(values) {
@@ -55,6 +59,18 @@ func ParseExpect(values []string) ([]string, error) {
 func ValidateExpectContent(expectations []string, hasContent bool) error {
 	if !hasContent && slices.Contains(expectations, continueExpectation) {
 		return ErrExpectWithoutContent
+	}
+	return nil
+}
+
+// CheckExpectationSupport checks expectations from ParseExpect; the gateway
+// supports only continueExpectation. The first other member returns
+// ErrUnsupportedExpectation.
+func CheckExpectationSupport(expectations []string) error {
+	for expectation := range slices.Values(expectations) {
+		if expectation != continueExpectation {
+			return fmt.Errorf("%w: %q", ErrUnsupportedExpectation, expectation)
+		}
 	}
 	return nil
 }

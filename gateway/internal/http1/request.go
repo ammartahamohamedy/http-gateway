@@ -12,47 +12,56 @@ import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/lineio"
 )
 
-// maxRequestLineBytes caps content read by ReadRequest at 8 KiB, excluding
-// CRLF, to bound buffering before parsing. This is a local
-// implementation limit: RFC 9112, Section 3 recommends supporting at least
-// 8000 octets but defines no universal maximum.
-// https://datatracker.ietf.org/doc/html/rfc9112#section-3
-const maxRequestLineBytes = 8 * 1024
+// Local request limits. They bound buffering and connection time; RFC 9112
+// sets no universal maximum for any of them.
+const (
+	// maxRequestLineBytes caps request-line content, excluding CRLF, at 8 KiB.
+	// RFC 9112, Section 3 recommends supporting at least 8000 octets.
+	maxRequestLineBytes = 8 * 1024
 
-// maxLeadingEmptyLines caps the empty lines skipped before a request-line, so a
-// client cannot hold a connection by sending CRLFs forever. This is a local
-// limit: RFC 9112, Section 2.2 asks servers to ignore at least one.
-const maxLeadingEmptyLines = 4
+	// maxLeadingEmptyLines caps the empty lines skipped before a request-line,
+	// so a client cannot hold a connection by sending CRLFs forever. RFC 9112,
+	// Section 2.2 asks servers to ignore at least one.
+	maxLeadingEmptyLines = 4
 
-// requestHeaderLimits are local limits for a request header section: 8 KiB per
-// physical line, 32 KiB in total including CRLFs, and at most 100 fields.
+	// maxRequestBodyBytes caps a Content-Length request body at 1 MiB.
+	maxRequestBodyBytes = 1 << 20
+)
+
+// requestHeaderLimits are the local limits for a request header section.
 var requestHeaderLimits = header.Limits{
 	LineBytes:    8 * 1024,
 	SectionBytes: 32 * 1024,
 	Fields:       100,
 }
 
-// ErrRequestLineTooLong is returned by ReadRequest when request-line content
-// exceeds 8192 bytes, excluding its terminating CRLF.
-var ErrRequestLineTooLong = errors.New("http1: request line exceeds 8192 bytes")
+var (
+	// ErrRequestLineTooLong is returned by ReadRequest when request-line
+	// content, excluding CRLF, exceeds maxRequestLineBytes.
+	ErrRequestLineTooLong = errors.New("http1: request line exceeds 8192 bytes")
 
-// ErrTooManyLeadingEmptyLines is returned by ReadRequest when more than 4 empty
-// lines precede the request-line.
-var ErrTooManyLeadingEmptyLines = errors.New("http1: too many empty lines before request line")
+	// ErrTooManyLeadingEmptyLines is returned by ReadRequest when more than
+	// maxLeadingEmptyLines empty lines precede the request-line.
+	ErrTooManyLeadingEmptyLines = errors.New("http1: too many empty lines before request line")
+
+	// ErrRequestBodyTooLarge is returned by ReadRequest when Content-Length
+	// exceeds maxRequestBodyBytes.
+	ErrRequestBodyTooLarge = errors.New("http1: request body exceeds 1048576 bytes")
+)
 
 // RequestLine contains the method, request-target, and HTTP version number
 // from a request's start-line, excluding its CRLF terminator.
 type RequestLine struct {
 	Method        string
 	RequestTarget string
-	// Version is always "1.1"; higher HTTP/1 minors are processed as 1.1.
+	// Version is always "1.1".
 	Version string
 }
 
 // Request holds an HTTP/1.x request-line, header fields, parsed metadata from
-// the supported fields, and an optional body stream. ReadRequest currently
-// populates RequestLine, Headers, and Fields, leaving Body nil and body bytes
-// available through the same buffered reader.
+// the supported fields, and the body. Body is empty without framing fields,
+// exactly Content-Length bytes with one, and nil for chunked bodies until their
+// decoder exists.
 type Request struct {
 	RequestLine RequestLine
 	Headers     header.Headers
@@ -61,10 +70,8 @@ type Request struct {
 }
 
 // processRequestLine skips up to maxLeadingEmptyLines empty CRLF lines, reads a
-// bounded request-line, and calls parseRequestLine to validate and parse its
-// method, target, and version. Oversized lines return ErrRequestLineTooLong, and
-// further empty lines return ErrTooManyLeadingEmptyLines. Read errors are wrapped;
-// parsing errors are returned unchanged.
+// bounded request-line, and parses it with parseRequestLine. Read errors are
+// wrapped; parsing errors are returned unchanged.
 func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
 	for range maxLeadingEmptyLines + 1 {
 		rawLine, err := lineio.ReadCRLFLine(reader, maxRequestLineBytes)
@@ -83,13 +90,12 @@ func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
 }
 
 // parseRequestLine parses line contents without a CRLF terminator. It requires
-// exactly three nonempty components separated by single spaces and HTTP/1.1;
-// higher HTTP/1 minors are processed as 1.1, and HTTP/1.0 is rejected as local
-// policy. Method case and request-target encoding are preserved. It does not
-// check whether a method is implemented by the server. This function does not
-// enforce a size limit; ReadRequest applies the input limit before calling it.
-// Direct callers are responsible for bounding input when a size limit is
-// required.
+// exactly three nonempty components separated by single spaces and a version
+// that parseHTTPVersion processes as 1.1; HTTP/1.0 is rejected as local policy.
+// Method case and request-target encoding are preserved. It does not check
+// whether a method is implemented by the server. This function does not enforce
+// a size limit; ReadRequest applies the input limit before calling it. Direct
+// callers are responsible for bounding input when a size limit is required.
 func parseRequestLine(rawLine string) (RequestLine, error) {
 	parts := strings.Split(rawLine, " ")
 	if len(parts) != 3 {

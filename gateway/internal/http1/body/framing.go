@@ -10,7 +10,7 @@ import (
 type Mode int
 
 const (
-	Unknown       Mode = iota // Zero value; never returned by Framing.
+	Unknown       Mode = iota // Zero value.
 	None                      // No body.
 	ContentLength             // Exactly Message.ContentLength bytes, possibly zero.
 	Chunked                   // Chunked coding; earlier codings are decoded after it.
@@ -25,8 +25,7 @@ var (
 	ErrUnsupportedFraming = errors.New("http1: message body framing is unsupported")
 )
 
-// Message holds plain framing inputs, keeping this package independent of the
-// http1 message types.
+// Message holds the plain inputs to Framing.
 type Message struct {
 	Version string // "1.0" or "1.1".
 
