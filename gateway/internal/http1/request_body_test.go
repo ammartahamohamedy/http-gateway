@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"compress/gzip"
+	"compress/zlib"
 	"io"
 	"slices"
 	"strconv"
@@ -199,4 +200,24 @@ func TestReadRequestLimitsDecodedBody(t *testing.T) {
 	require.NoError(t, err)
 	_, err = io.ReadAll(request.Body)
 	require.ErrorIs(t, err, body.ErrBodyTooLarge)
+}
+
+func TestReadRequestDecodesStackedTransferCodings(t *testing.T) {
+	var gzipped bytes.Buffer
+	gzipWriter := gzip.NewWriter(&gzipped)
+	_, err := gzipWriter.Write([]byte("hello world"))
+	require.NoError(t, err)
+	require.NoError(t, gzipWriter.Close())
+	var encoded bytes.Buffer
+	zlibWriter := zlib.NewWriter(&encoded)
+	_, err = zlibWriter.Write(gzipped.Bytes())
+	require.NoError(t, err)
+	require.NoError(t, zlibWriter.Close())
+
+	chunks := strconv.FormatInt(int64(encoded.Len()), 16) + "\r\n" + encoded.String() + "\r\n0\r\n\r\n"
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: gzip, deflate, chunked\r\n\r\n" + chunks)))
+	require.NoError(t, err)
+	content, err := io.ReadAll(request.Body)
+	require.NoError(t, err)
+	require.Equal(t, "hello world", string(content))
 }

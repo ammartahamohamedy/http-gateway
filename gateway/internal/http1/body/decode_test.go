@@ -2,7 +2,9 @@ package body
 
 import (
 	"bytes"
+	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"errors"
 	"io"
 	"slices"
@@ -134,6 +136,7 @@ func TestDecodeUnsupportedCoding(t *testing.T) {
 	require.ErrorIs(t, err, ErrUnsupportedCoding)
 	require.False(t, CanDecode("compress"))
 	require.True(t, CanDecode("gzip"))
+	require.True(t, CanDecode("deflate"))
 }
 
 // countingReader counts reads from its source.
@@ -193,4 +196,91 @@ func TestDecodeClose(t *testing.T) {
 	require.True(t, framed.closed)
 	_, err := decoded.Read(make([]byte, 5))
 	require.ErrorIs(t, err, ErrBodyClosed)
+}
+
+func zlibBytes(t *testing.T, data []byte) []byte {
+	t.Helper()
+	var encoded bytes.Buffer
+	writer := zlib.NewWriter(&encoded)
+	_, err := writer.Write(data)
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	return encoded.Bytes()
+}
+
+func TestDecodeDeflate(t *testing.T) {
+	encoded := zlibBytes(t, []byte("hello world"))
+	for fragmented := range slices.Values([]bool{false, true}) {
+		var source io.Reader = bytes.NewReader(encoded)
+		if fragmented {
+			source = iotest.OneByteReader(source)
+		}
+		content, err := io.ReadAll(Decode(NewFixedReader(source, int64(len(encoded))), []string{"deflate"}, decodeTestLimit))
+		require.NoError(t, err, "fragmented=%v", fragmented)
+		require.Equal(t, "hello world", string(content))
+	}
+}
+
+func TestDecodeAppliesCodingsInReverse(t *testing.T) {
+	// Applied order gzip then deflate: decode deflate first, then gzip.
+	encoded := zlibBytes(t, gzipBytes(t, []byte("hello")))
+	content, err := decodeAll(encoded, []string{"gzip", "deflate"}, decodeTestLimit)
+	require.NoError(t, err)
+	require.Equal(t, "hello", content)
+
+	_, err = decodeAll(encoded, []string{"deflate", "gzip"}, decodeTestLimit)
+	require.ErrorIs(t, err, ErrInvalidCoding, "a wrong declared order must fail")
+}
+
+func TestDecodeRejectsMalformedDeflate(t *testing.T) {
+	encoded := zlibBytes(t, []byte("hello world"))
+	badChecksum := slices.Clone(encoded)
+	badChecksum[len(badChecksum)-1] ^= 0xff
+	var raw bytes.Buffer
+	rawWriter, err := flate.NewWriter(&raw, flate.DefaultCompression)
+	require.NoError(t, err)
+	_, err = rawWriter.Write([]byte("hello world"))
+	require.NoError(t, err)
+	require.NoError(t, rawWriter.Close())
+	tests := []struct {
+		name    string
+		encoded []byte
+	}{
+		{"empty stream", nil},
+		{"not zlib", []byte("hello world")},
+		{"raw deflate without zlib header", raw.Bytes()},
+		{"checksum mismatch", badChecksum},
+		{"data after the stream", append(slices.Clone(encoded), "junk"...)},
+		{"zero byte after the stream", append(slices.Clone(encoded), 0)},
+		{"cut short", encoded[:len(encoded)-3]},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := decodeAll(test.encoded, []string{"deflate"}, decodeTestLimit)
+			require.ErrorIs(t, err, ErrInvalidCoding)
+			require.NotErrorIs(t, err, io.ErrUnexpectedEOF)
+		})
+	}
+}
+
+func TestDecodeDeflateIncompleteBody(t *testing.T) {
+	encoded := zlibBytes(t, []byte(strings.Repeat("hello world ", 100)))
+	framed := NewFixedReader(bytes.NewReader(encoded[:len(encoded)/2]), int64(len(encoded)))
+	_, err := io.ReadAll(Decode(framed, []string{"deflate"}, decodeTestLimit))
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+}
+
+func TestDecodeLimitsDecodedDeflate(t *testing.T) {
+	bomb := zlibBytes(t, make([]byte, 4*decodeTestLimit))
+	_, err := decodeAll(bomb, []string{"deflate"}, decodeTestLimit)
+	require.ErrorIs(t, err, ErrBodyTooLarge)
+}
+
+func TestDecodePassesSourceErrorAfterStream(t *testing.T) {
+	errSource := errors.New("connection reset")
+	encoded := zlibBytes(t, []byte("hello"))
+	source := io.MultiReader(bytes.NewReader(encoded), iotest.ErrReader(errSource))
+	framed := NewFixedReader(source, int64(len(encoded))+10)
+	_, err := io.ReadAll(Decode(framed, []string{"deflate"}, decodeTestLimit))
+	require.ErrorIs(t, err, errSource)
 }

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"compress/flate"
 	"compress/gzip"
+	"compress/zlib"
 	"errors"
 	"fmt"
 	"io"
@@ -20,10 +21,18 @@ var (
 )
 
 // decoders maps a transfer coding to a function wrapping an encoded stream with
-// its decoder. The function may read the stream's header.
+// its decoder. The function may read the stream's header. HTTP's deflate is the
+// zlib format, not raw deflate (RFC 9110, Section 8.4.1.2).
 var decoders = map[string]func(io.Reader) (io.Reader, error){
 	"gzip": func(source io.Reader) (io.Reader, error) {
 		reader, err := gzip.NewReader(source)
+		if err != nil {
+			return nil, err
+		}
+		return reader, nil
+	},
+	"deflate": func(source io.Reader) (io.Reader, error) {
+		reader, err := zlib.NewReader(source)
 		if err != nil {
 			return nil, err
 		}
@@ -117,7 +126,9 @@ func (decoded *decodedReader) checkStreamEnd() error {
 // cut short inside a complete body. io.EOF and other errors pass through.
 func (decoded *decodedReader) classify(err error) error {
 	var corrupt flate.CorruptInputError
-	formatError := errors.Is(err, gzip.ErrHeader) || errors.Is(err, gzip.ErrChecksum) || errors.As(err, &corrupt)
+	formatError := errors.Is(err, gzip.ErrHeader) || errors.Is(err, gzip.ErrChecksum) ||
+		errors.Is(err, zlib.ErrHeader) || errors.Is(err, zlib.ErrChecksum) || errors.Is(err, zlib.ErrDictionary) ||
+		errors.As(err, &corrupt)
 	truncated := errors.Is(err, io.ErrUnexpectedEOF) && decoded.input.ended
 	if formatError || truncated {
 		// The cause is formatted, not wrapped, so the error matches only
