@@ -25,6 +25,7 @@ func TestParseConnection(t *testing.T) {
 		{"empty list members ignored", []string{",close,, x-hop ,"}, []string{"close", "x-hop"}},
 		{"duplicates preserved", []string{"close, CLOSE"}, []string{"close", "close"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			options, err := ParseConnection(test.values)
@@ -52,6 +53,7 @@ func TestParseConnectionRejectsInvalidValues(t *testing.T) {
 		{"CR", []string{"close\r"}},
 		{"invalid second line", []string{"close", "a b"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			options, err := ParseConnection(test.values)
@@ -72,6 +74,7 @@ func TestValidateConnectionOptions(t *testing.T) {
 	for options := range slices.Values([][]string{nil, {"close"}, {"keep-alive", "te", "upgrade", "x-host", "content-type"}}) {
 		require.NoError(t, ValidateConnectionOptions(options))
 	}
+
 	for options := range slices.Values([][]string{{"host"}, {"content-length"}, {"transfer-encoding"}, {"close", "host"}}) {
 		require.ErrorIs(t, ValidateConnectionOptions(options), ErrProtectedConnectionOption)
 	}

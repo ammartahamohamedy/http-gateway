@@ -17,6 +17,7 @@ func TestParseHTTPVersion(t *testing.T) {
 		{"HTTP/1.2", "1.1"},
 		{"HTTP/1.9", "1.1"},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.rawVersion, func(t *testing.T) {
 			version, err := parseHTTPVersion(test.rawVersion)

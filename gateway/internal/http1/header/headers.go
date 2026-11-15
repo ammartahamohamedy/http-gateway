@@ -52,27 +52,18 @@ func (h Headers) Values(name string) []string {
 func ReadHeadersSection(reader *bufio.Reader, limits Limits) (Headers, error) {
 	var headers Headers
 	var pending strings.Builder
+
 	sectionBytes := 0
 	fieldCount := 0
+
 	for {
-		lineLimit := min(limits.LineBytes, limits.SectionBytes-sectionBytes-2)
-		if lineLimit < 0 {
-			return nil, ErrSectionTooLarge
-		}
-		rawLine, err := lineio.ReadCRLFLine(reader, lineLimit)
-		if errors.Is(err, lineio.ErrLineTooLong) {
-			if lineLimit < limits.LineBytes {
-				return nil, ErrSectionTooLarge
-			}
-			return nil, ErrLineTooLong
-		}
+		rawLine, err := readHeaderLine(reader, limits, sectionBytes)
 		if err != nil {
-			if errors.Is(err, io.EOF) {
-				err = io.ErrUnexpectedEOF
-			}
-			return nil, fmt.Errorf("http1: reading headers: %w", err)
+			return nil, err
 		}
+
 		sectionBytes += len(rawLine) + 2
+
 		if rawLine != "" && (rawLine[0] == ' ' || rawLine[0] == '\t') {
 			if pending.Len() == 0 {
 				return nil, errors.New("http1: header continuation without a preceding field")
@@ -81,27 +72,68 @@ func ReadHeadersSection(reader *bufio.Reader, limits Limits) (Headers, error) {
 			pending.WriteString(strings.Trim(rawLine, " \t"))
 			continue
 		}
+
 		if pending.Len() > 0 {
-			name, value, err := parseHeaderField(pending.String())
-			if err != nil {
+			if headers, err = addField(headers, pending.String()); err != nil {
 				return nil, err
 			}
-			if headers == nil {
-				headers = make(Headers)
-			}
-			name = strings.ToLower(name)
-			headers[name] = append(headers[name], value)
 			fieldCount++
 			pending.Reset()
 		}
+
 		if rawLine == "" {
 			return headers, nil
 		}
+
 		if fieldCount == limits.Fields {
 			return nil, ErrTooManyFields
 		}
 		pending.WriteString(strings.TrimRight(rawLine, " \t"))
 	}
+}
+
+// readHeaderLine reads one physical header line within limits.LineBytes and the
+// section bytes left. An oversized line returns ErrLineTooLong, or
+// ErrSectionTooLarge when the section budget is the tighter limit; EOF returns
+// io.ErrUnexpectedEOF, since the section is unfinished.
+func readHeaderLine(reader *bufio.Reader, limits Limits, sectionBytes int) (string, error) {
+	lineLimit := min(limits.LineBytes, limits.SectionBytes-sectionBytes-2)
+	if lineLimit < 0 {
+		return "", ErrSectionTooLarge
+	}
+
+	rawLine, err := lineio.ReadCRLFLine(reader, lineLimit)
+	if errors.Is(err, lineio.ErrLineTooLong) {
+		if lineLimit < limits.LineBytes {
+			return "", ErrSectionTooLarge
+		}
+		return "", ErrLineTooLong
+	}
+	if err != nil {
+		if errors.Is(err, io.EOF) {
+			err = io.ErrUnexpectedEOF
+		}
+		return "", fmt.Errorf("http1: reading headers: %w", err)
+	}
+
+	return rawLine, nil
+}
+
+// addField parses one unfolded field line with parseHeaderField and appends its
+// value under the lowercase name, creating headers when nil.
+func addField(headers Headers, line string) (Headers, error) {
+	name, value, err := parseHeaderField(line)
+	if err != nil {
+		return nil, err
+	}
+
+	if headers == nil {
+		headers = make(Headers)
+	}
+
+	name = strings.ToLower(name)
+	headers[name] = append(headers[name], value)
+	return headers, nil
 }
 
 // parseHeaderField parses one field line without CRLF. It preserves name casing and
@@ -113,11 +145,14 @@ func parseHeaderField(rawLine string) (name, value string, err error) {
 	if !found {
 		return "", "", errors.New("http1: header field is missing a colon")
 	}
+
 	if !grammar.IsToken(name) {
 		return "", "", errors.New("http1: invalid header field name")
 	}
+
 	if !grammar.IsFieldValue(value) {
 		return "", "", errors.New("http1: invalid header field value")
 	}
+
 	return name, strings.Trim(value, " \t"), nil
 }

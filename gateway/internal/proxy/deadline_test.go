@@ -30,6 +30,7 @@ func TestIdleDeadlineReaderMovesDeadlineBeforeEachRead(t *testing.T) {
 		_, err := reader.Read(make([]byte, 2))
 		require.NoError(t, err)
 	}
+
 	require.Len(t, recorder.deadlines, 2)
 	for _, deadline := range recorder.deadlines {
 		require.WithinDuration(t, start.Add(time.Minute), deadline, time.Second)

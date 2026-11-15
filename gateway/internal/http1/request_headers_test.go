@@ -19,6 +19,7 @@ func TestRequestFieldRulesOrder(t *testing.T) {
 	for rule := range slices.Values(requestFieldRules) {
 		names = append(names, rule.name)
 	}
+
 	require.Equal(t, []string{
 		"Host", "Content-Length", "Transfer-Encoding", "Trailer", "Connection", "Expect",
 		"Content-Type", "Accept", "Content-Encoding", "Accept-Encoding",
@@ -86,6 +87,7 @@ func TestReadRequestFields(t *testing.T) {
 		{"unknown valid fields accepted", "GET / HTTP/1.1\r\nHost: example.com\r\nX-Unfamiliar: \"a,b\"\r\nX-Unfamiliar: c\r\n\r\n",
 			RequestFields{Authority: "example.com"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			request, err := ReadRequest(bufio.NewReader(strings.NewReader(test.message)))
@@ -138,6 +140,7 @@ func TestTransferEncodingErrors(t *testing.T) {
 		{"malformed list", "chun ked", fields.ErrInvalidTransferEncoding},
 		{"chunked not final", "gzip", fields.ErrChunkedNotFinal},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			headers := header.Headers{"host": {"example.com"}, "transfer-encoding": {test.value}}
@@ -160,6 +163,7 @@ func TestFramingConflict(t *testing.T) {
 		{"zero length", header.Headers{"host": {"example.com"}, "content-length": {"0"}, "transfer-encoding": {"chunked"}}},
 		{"coding list", header.Headers{"host": {"example.com"}, "content-length": {"5"}, "transfer-encoding": {"gzip, chunked"}}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
@@ -182,6 +186,7 @@ func TestInvalidTransferEncodingPrecedesFramingConflict(t *testing.T) {
 		{"malformed list", "chun ked", fields.ErrInvalidTransferEncoding},
 		{"chunked not final", "xchunked", fields.ErrChunkedNotFinal},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			headers := header.Headers{"host": {"example.com"}, "content-length": {"5"}, "transfer-encoding": {test.value}}
@@ -231,6 +236,7 @@ func TestFramingConflictPrecedesConnectionCheck(t *testing.T) {
 		"transfer-encoding": {"chunked"},
 		"connection":        {"content-length"},
 	}
+
 	_, err := processRequestFields(originLine, headers)
 	require.ErrorIs(t, err, fields.ErrFramingConflict)
 }
@@ -260,6 +266,7 @@ func TestExpectWithoutContent(t *testing.T) {
 		{"no framing", header.Headers{"host": {"example.com"}, "expect": {"100-continue"}}},
 		{"zero length", header.Headers{"host": {"example.com"}, "content-length": {"0"}, "expect": {"100-continue"}}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
@@ -296,6 +303,7 @@ func TestMediaTypeFieldErrors(t *testing.T) {
 		{"content type", "Content-Type", header.Headers{"host": {"example.com"}, "content-type": {"text"}}, fields.ErrInvalidContentType},
 		{"accept", "Accept", header.Headers{"host": {"example.com"}, "accept": {"*/html"}}, fields.ErrInvalidAccept},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
@@ -318,6 +326,7 @@ func TestContentCodingFieldErrors(t *testing.T) {
 		{"content encoding", "Content-Encoding", header.Headers{"host": {"example.com"}, "content-encoding": {"gzip;q=1"}}, fields.ErrInvalidContentEncoding},
 		{"accept encoding", "Accept-Encoding", header.Headers{"host": {"example.com"}, "accept-encoding": {"gzip;q=2"}}, fields.ErrInvalidAcceptEncoding},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
@@ -357,6 +366,7 @@ func TestCORSFieldErrors(t *testing.T) {
 		{"method", "Access-Control-Request-Method", header.Headers{"host": {"example.com"}, "access-control-request-method": {"GET, PUT"}}, fields.ErrInvalidAccessControlRequestMethod},
 		{"headers", "Access-Control-Request-Headers", header.Headers{"host": {"example.com"}, "access-control-request-headers": {""}}, fields.ErrInvalidAccessControlRequestHeaders},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, test.headers)
@@ -386,6 +396,7 @@ func TestTrailerField(t *testing.T) {
 		{"malformed list", "a b", fields.ErrInvalidTrailer},
 		{"forbidden field announced", "X-Checksum, Content-Length", fields.ErrForbiddenTrailerField},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			parsed, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "trailer": {test.value}})

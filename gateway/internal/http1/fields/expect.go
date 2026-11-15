@@ -37,6 +37,7 @@ var (
 // ErrInvalidExpect and return nil. The input is not changed.
 func ParseExpect(values []string) ([]string, error) {
 	var expectations []string
+
 	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
@@ -50,6 +51,7 @@ func ParseExpect(values []string) ([]string, error) {
 			expectations = append(expectations, expectation)
 		}
 	}
+
 	return expectations, nil
 }
 
@@ -60,6 +62,7 @@ func ValidateExpectContent(expectations []string, hasContent bool) error {
 	if !hasContent && slices.Contains(expectations, continueExpectation) {
 		return ErrExpectWithoutContent
 	}
+
 	return nil
 }
 
@@ -72,6 +75,7 @@ func CheckExpectationSupport(expectations []string) error {
 			return fmt.Errorf("%w: %q", ErrUnsupportedExpectation, expectation)
 		}
 	}
+
 	return nil
 }
 
@@ -82,23 +86,28 @@ func parseExpectation(member string) (string, bool) {
 	if !ok {
 		return "", false
 	}
+
 	head := grammar.TrimOWS(parts[0])
 	name, value, hasValue := strings.Cut(head, "=")
 	if !grammar.IsToken(name) {
 		return "", false
 	}
+
 	parameters := parts[1:]
 	if !hasValue {
 		return strings.ToLower(name), len(parameters) == 0
 	}
+
 	if !grammar.IsToken(value) && !grammar.IsQuotedString(value) {
 		return "", false
 	}
+
 	for parameter := range slices.Values(parameters) {
 		parameter = grammar.TrimOWS(parameter)
 		if parameter != "" && !grammar.IsParameter(parameter) {
 			return "", false
 		}
 	}
+
 	return strings.ToLower(name) + member[len(name):], true
 }

@@ -24,6 +24,7 @@ func (guard *closeGuard) checkOpen() error {
 	if guard.closed {
 		return ErrBodyClosed
 	}
+
 	return nil
 }
 

@@ -2,7 +2,9 @@ package header
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"slices"
 	"strings"
@@ -16,6 +18,7 @@ func TestHeadersValues(t *testing.T) {
 		"x-test":       {"first", "\"second,third\"\tpart\xff", ""},
 		"content-type": {"text/plain; charset=utf-8"},
 	}
+
 	tests := []struct {
 		name    string
 		headers Headers
@@ -30,6 +33,7 @@ func TestHeadersValues(t *testing.T) {
 		{"nil headers", nil, "X-Test", nil},
 		{"empty headers", Headers{}, "X-Test", nil},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.Equal(t, test.want, test.headers.Values(test.query))
@@ -63,6 +67,7 @@ func TestParseHeaderField(t *testing.T) {
 		{"opaque bytes", "X-Test: \x80\xff\xc3", "X-Test", "\x80\xff\xc3"},
 		{"Unicode whitespace preserved", "X-Test: \u00a0value\u00a0 ", "X-Test", "\u00a0value\u00a0"},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			name, value, err := parseHeaderField(test.rawLine)
@@ -94,6 +99,7 @@ func TestParseHeaderFieldRejectsMalformedInput(t *testing.T) {
 		{"folded value", "X-Test: a\r\n b"},
 		{"quoted control", "X-Test: \"a\x0bb\""},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			name, value, err := parseHeaderField(test.rawLine)
@@ -152,6 +158,7 @@ func TestReadHeadersSectionLimits(t *testing.T) {
 		{"oversized continuation", "X: a\r\n " + strings.Repeat("b", testLimits.LineBytes) + "\r\n\r\n", 0, ErrLineTooLong},
 		{"continuations use section budget", "X: a\r\n" + strings.Repeat(" \t\r\n", testLimits.SectionBytes/4), 0, ErrSectionTooLarge},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			headers, err := ReadHeadersSection(bufio.NewReaderSize(strings.NewReader(test.section), 16), testLimits)
@@ -168,4 +175,44 @@ func TestReadHeadersSectionLimits(t *testing.T) {
 			require.Equal(t, test.count, count)
 		})
 	}
+}
+
+func TestReadHeadersSectionRejectsMalformedSections(t *testing.T) {
+	tests := []struct {
+		name    string
+		section string
+		want    error
+	}{
+		{"continuation without a field", " folded\r\n\r\n", nil},
+		{"malformed field line", "no colon\r\n\r\n", nil},
+		{"EOF inside the section", "X: v\r\n", io.ErrUnexpectedEOF},
+		{"EOF before any line", "", io.ErrUnexpectedEOF},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			headers, err := ReadHeadersSection(bufio.NewReader(strings.NewReader(test.section)), testLimits)
+			require.Error(t, err)
+			if test.want != nil {
+				require.ErrorIs(t, err, test.want)
+			}
+			require.Nil(t, headers)
+		})
+	}
+}
+
+func TestReadHeadersSectionPropagatesReadErrors(t *testing.T) {
+	errSource := errors.New("connection reset")
+	source := io.MultiReader(strings.NewReader("X: v\r\n"), &failingReader{err: errSource})
+	headers, err := ReadHeadersSection(bufio.NewReader(source), testLimits)
+	require.ErrorIs(t, err, errSource)
+	require.Nil(t, headers)
+}
+
+// failingReader always fails with err.
+type failingReader struct {
+	err error
+}
+
+func (failing *failingReader) Read([]byte) (int, error) {
+	return 0, failing.err
 }

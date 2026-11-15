@@ -27,6 +27,8 @@ func (reader *idleDeadlineReader) Read(buffer []byte) (int, error) {
 	if deadline.After(reader.cutoff) {
 		deadline = reader.cutoff
 	}
+
 	_ = reader.connection.SetReadDeadline(deadline)
+
 	return reader.source.Read(buffer)
 }

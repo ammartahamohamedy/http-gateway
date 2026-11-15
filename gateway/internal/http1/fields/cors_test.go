@@ -23,6 +23,7 @@ func TestParseOrigin(t *testing.T) {
 		{"IPv4", []string{"http://127.0.0.1:3000"}, "http://127.0.0.1:3000"},
 		{"IPv6", []string{"http://[::1]:3000"}, "http://[::1]:3000"},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			origin, err := ParseOrigin(test.values)
@@ -59,6 +60,7 @@ func TestParseOriginRejectsInvalidValues(t *testing.T) {
 		{"obs-text", []string{"https://ex\xffample.com"}},
 		{"NUL", []string{"https://example.com\x00"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			origin, err := ParseOrigin(test.values)
@@ -80,6 +82,7 @@ func TestParseAccessControlRequestMethod(t *testing.T) {
 		{"case preserved", []string{"patch"}, "patch"},
 		{"extension method", []string{"X-CUSTOM"}, "X-CUSTOM"},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			method, err := ParseAccessControlRequestMethod(test.values)
@@ -101,6 +104,7 @@ func TestParseAccessControlRequestMethodRejectsInvalidValues(t *testing.T) {
 		{"non-token", []string{"PUT/1"}},
 		{"NUL", []string{"PUT\x00"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			method, err := ParseAccessControlRequestMethod(test.values)
@@ -124,6 +128,7 @@ func TestParseAccessControlRequestHeaders(t *testing.T) {
 		{"empty list members", []string{",a,, b ,"}, []string{"a", "b"}},
 		{"one empty line among others", []string{"", "a"}, []string{"a"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			names, err := ParseAccessControlRequestHeaders(test.values)
@@ -149,6 +154,7 @@ func TestParseAccessControlRequestHeadersRejectsInvalidValues(t *testing.T) {
 		{"obs-text", []string{"a\xff"}},
 		{"invalid second line", []string{"a", "b c"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			names, err := ParseAccessControlRequestHeaders(test.values)

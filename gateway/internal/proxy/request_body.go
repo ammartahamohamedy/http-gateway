@@ -34,7 +34,9 @@ func readRequestBody(connection net.Conn, request *http1.Request) ([]byte, error
 			log.Printf("closing request body: %v", err)
 		}
 	}()
+
 	cutoff := time.Now().Add(requestBodyTimeout)
+
 	if slices.Contains(request.Fields.Expectations, "100-continue") {
 		if err := connection.SetWriteDeadline(time.Now().Add(requestBodyIdleTimeout)); err != nil {
 			return nil, fmt.Errorf("setting write deadline: %w", err)
@@ -43,5 +45,6 @@ func readRequestBody(connection net.Conn, request *http1.Request) ([]byte, error
 			return nil, fmt.Errorf("writing 100 Continue: %w", err)
 		}
 	}
+
 	return io.ReadAll(newIdleDeadlineReader(connection, request.Body, requestBodyIdleTimeout, cutoff))
 }

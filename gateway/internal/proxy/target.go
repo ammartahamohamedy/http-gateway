@@ -32,6 +32,7 @@ var (
 func checkRequestTarget(request *http1.Request) error {
 	target := request.RequestLine.RequestTarget
 	var path string
+
 	switch request.RequestLine.TargetForm() {
 	case http1.AuthorityForm:
 		return ErrUnsupportedTargetForm
@@ -50,9 +51,11 @@ func checkRequestTarget(request *http1.Request) error {
 			path = rest[start:]
 		}
 	}
+
 	if err := checkPort(request.Fields.Authority); err != nil {
 		return err
 	}
+
 	return checkPath(path)
 }
 
@@ -63,14 +66,17 @@ func checkPort(authority string) error {
 	if colon < 0 || colon < strings.LastIndexByte(authority, ']') {
 		return nil
 	}
+
 	port := authority[colon+1:]
 	if port == "" {
 		return nil
 	}
+
 	value, err := strconv.Atoi(port)
 	if err != nil || value < 1 || value > 65535 {
 		return ErrInvalidPort
 	}
+
 	return nil
 }
 
@@ -81,11 +87,13 @@ func checkPath(path string) error {
 	if strings.HasPrefix(path, "//") {
 		return ErrAmbiguousPath
 	}
+
 	for segment := range strings.SplitSeq(path, "/") {
 		switch strings.ReplaceAll(strings.ToLower(segment), "%2e", ".") {
 		case ".", "..":
 			return ErrAmbiguousPath
 		}
 	}
+
 	return nil
 }

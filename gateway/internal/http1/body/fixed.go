@@ -23,6 +23,7 @@ func (fixed *fixedReader) Read(buffer []byte) (int, error) {
 	if err := fixed.checkOpen(); err != nil {
 		return 0, err
 	}
+
 	count, err := fixed.limited.Read(buffer)
 	switch {
 	case fixed.limited.N == 0:
@@ -30,5 +31,6 @@ func (fixed *fixedReader) Read(buffer []byte) (int, error) {
 	case errors.Is(err, io.EOF):
 		return count, io.ErrUnexpectedEOF
 	}
+
 	return count, err
 }

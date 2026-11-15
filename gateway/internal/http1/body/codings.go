@@ -58,6 +58,7 @@ func (decoder codingDecoder) isFormatError(err error) bool {
 	if errors.As(err, &corrupt) {
 		return true
 	}
+
 	return slices.ContainsFunc(decoder.formatErrors, func(formatErr error) bool {
 		return errors.Is(err, formatErr)
 	})

@@ -51,6 +51,7 @@ func TestDecodeGzip(t *testing.T) {
 		{"buffered", func() io.Reader { return bytes.NewReader(encoded) }},
 		{"one byte per read", func() io.Reader { return iotest.OneByteReader(bytes.NewReader(encoded)) }},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			framed := NewFixedReader(test.source(), int64(len(encoded)))
@@ -92,6 +93,7 @@ func TestDecodeRejectsMalformedGzip(t *testing.T) {
 		{"data after the stream", append(slices.Clone(encoded), "junk"...)},
 		{"zero byte after the stream", append(slices.Clone(encoded), 0)},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := decodeAll(test.encoded, []string{"gzip"}, decodeTestLimit)
@@ -252,6 +254,7 @@ func TestDecodeRejectsMalformedDeflate(t *testing.T) {
 		{"zero byte after the stream", append(slices.Clone(encoded), 0)},
 		{"cut short", encoded[:len(encoded)-3]},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := decodeAll(test.encoded, []string{"deflate"}, decodeTestLimit)

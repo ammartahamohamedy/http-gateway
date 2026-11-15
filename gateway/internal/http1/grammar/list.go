@@ -15,12 +15,14 @@ func SplitList(value string) ([]string, bool) {
 	if !ok {
 		return nil, false
 	}
+
 	members := make([]string, 0, len(parts))
 	for part := range slices.Values(parts) {
 		if member := TrimOWS(part); member != "" {
 			members = append(members, member)
 		}
 	}
+
 	return members, true
 }
 
@@ -31,6 +33,7 @@ func SplitUnquoted(s string, sep byte) ([]string, bool) {
 	var parts []string
 	start := 0
 	quoted, escaped := false, false
+
 	for i, b := range []byte(s) {
 		switch {
 		case escaped:
@@ -44,9 +47,11 @@ func SplitUnquoted(s string, sep byte) ([]string, bool) {
 			start = i + 1
 		}
 	}
+
 	if quoted {
 		return nil, false
 	}
+
 	return append(parts, s[start:]), true
 }
 
@@ -62,6 +67,7 @@ func IsQuotedString(s string) bool {
 	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
 		return false
 	}
+
 	escaped := false
 	for i := 1; i < len(s)-1; i++ {
 		b := s[i]
@@ -76,6 +82,7 @@ func IsQuotedString(s string) bool {
 			return false
 		}
 	}
+
 	return !escaped
 }
 
@@ -95,6 +102,7 @@ func IsChunkExtension(s string) bool {
 	if !hasValue {
 		return IsToken(name)
 	}
+
 	value = strings.TrimLeft(value, " \t")
 	return IsToken(strings.TrimRight(name, " \t")) && (IsToken(value) || IsQuotedString(value))
 }

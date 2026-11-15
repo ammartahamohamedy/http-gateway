@@ -86,6 +86,7 @@ func processRequestLine(reader *bufio.Reader) (RequestLine, error) {
 		}
 		return parseRequestLine(rawLine)
 	}
+
 	return RequestLine{}, ErrTooManyLeadingEmptyLines
 }
 
@@ -115,13 +116,16 @@ func parseRequestLine(rawLine string) (RequestLine, error) {
 	if !grammar.IsToken(method) {
 		return RequestLine{}, fmt.Errorf("http1: invalid method %q", method)
 	}
+
 	if err := validateRequestTarget(method, requestTarget); err != nil {
 		return RequestLine{}, err
 	}
+
 	versionNumber, err := parseHTTPVersion(version)
 	if err != nil {
 		return RequestLine{}, err
 	}
+
 	if versionNumber != "1.1" {
 		return RequestLine{}, fmt.Errorf("http1: unsupported HTTP version %q", version)
 	}

@@ -26,6 +26,7 @@ func TestReadCRLFLine(t *testing.T) {
 		{"data with EOF", iotest.DataErrReader(strings.NewReader("value\r\n")), "value"},
 		{"multiple buffer fragments", strings.NewReader(strings.Repeat("a", 64) + "\r\n"), strings.Repeat("a", 64)},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			line, err := ReadCRLFLine(bufio.NewReaderSize(test.reader, 16), 64)
@@ -72,6 +73,7 @@ func TestReadCRLFLineLimits(t *testing.T) {
 		{"partial terminator at limit", "abc\r", 3, "", io.ErrUnexpectedEOF},
 		{"oversized with partial terminator", "abcd\r", 3, "", ErrLineTooLong},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			line, err := ReadCRLFLine(bufio.NewReader(strings.NewReader(test.input)), test.limit)
@@ -109,6 +111,7 @@ func TestReadCRLFLineErrors(t *testing.T) {
 		{"read failure", iotest.ErrReader(readErr), readErr},
 		{"partial data and read failure", iotest.DataErrReader(io.MultiReader(strings.NewReader("value"), iotest.ErrReader(readErr))), readErr},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := ReadCRLFLine(bufio.NewReader(test.reader), 64)

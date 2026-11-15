@@ -82,10 +82,12 @@ func validateRequestTarget(method, requestTarget string) error {
 	if err != nil {
 		return fmt.Errorf("http1: invalid request-target: %w", err)
 	}
+
 	if strings.EqualFold(target.Scheme, "http") || strings.EqualFold(target.Scheme, "https") {
 		if target.Host == "" || target.User != nil {
 			return errors.New("http1: HTTP URI requires a host and must not include userinfo")
 		}
 	}
+
 	return nil
 }

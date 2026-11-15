@@ -22,6 +22,7 @@ func TestFixedReaderReadsExactLength(t *testing.T) {
 		{"data with EOF", func(s string) io.Reader { return iotest.DataErrReader(strings.NewReader(s)) }},
 		{"half reads", func(s string) io.Reader { return iotest.HalfReader(strings.NewReader(s)) }},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			reader := bufio.NewReaderSize(test.source("hello\x00\r\nNEXT"), 16)
@@ -59,6 +60,7 @@ func TestFixedReaderSmallBuffer(t *testing.T) {
 		}
 		require.NoError(t, err)
 	}
+
 	require.Equal(t, "hello", string(content))
 }
 
@@ -83,6 +85,7 @@ func TestFixedReaderPrematureEOF(t *testing.T) {
 		{"short data with EOF", iotest.DataErrReader(strings.NewReader("hel")), "hel"},
 		{"short one byte reads", iotest.OneByteReader(strings.NewReader("hel")), "hel"},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			content, err := io.ReadAll(NewFixedReader(test.source, 5))

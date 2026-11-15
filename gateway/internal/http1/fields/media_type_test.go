@@ -24,6 +24,7 @@ func TestValidateContentType(t *testing.T) {
 		{"empty parameters", []string{"text/plain;;charset=utf-8;"}},
 		{"parameter named q", []string{"text/plain;q=anything"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.NoError(t, ValidateContentType(test.values))
@@ -52,6 +53,7 @@ func TestValidateContentTypeRejectsInvalidValues(t *testing.T) {
 		{"obs-text", []string{"text/pl\xffin"}},
 		{"NUL", []string{"text/plain\x00"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.ErrorIs(t, ValidateContentType(test.values), ErrInvalidContentType)
@@ -87,6 +89,7 @@ func TestValidateAccept(t *testing.T) {
 		{"q one", []string{"*/*;q=1"}},
 		{"q one point zeros", []string{"*/*;q=1.000"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.NoError(t, ValidateAccept(test.values))
@@ -124,6 +127,7 @@ func TestValidateAcceptRejectsInvalidValues(t *testing.T) {
 		{"NUL", []string{"text/html\x00"}},
 		{"invalid second line", []string{"*/*", "text"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.ErrorIs(t, ValidateAccept(test.values), ErrInvalidAccept)

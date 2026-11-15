@@ -28,6 +28,7 @@ func TestFramingRequests(t *testing.T) {
 		{"HTTP/1.0 without framing fields", Message{Version: "1.0"}, None},
 		{"response-only inputs ignored", Message{Version: "1.1", ContentLength: 5, ContentLengthPresent: true, RequestMethod: "HEAD", StatusCode: 204}, ContentLength},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			mode, err := Framing(test.msg)
@@ -41,14 +42,17 @@ func TestFramingResponses(t *testing.T) {
 	response := func(method string, status int) Message {
 		return Message{Version: "1.1", IsResponse: true, RequestMethod: method, StatusCode: status}
 	}
+
 	withLength := func(msg Message, length int64) Message {
 		msg.ContentLength, msg.ContentLengthPresent = length, true
 		return msg
 	}
+
 	withCodings := func(msg Message, codings ...string) Message {
 		msg.TransferCodings = codings
 		return msg
 	}
+
 	http10 := func(msg Message) Message {
 		msg.Version = "1.0"
 		return msg
@@ -81,6 +85,7 @@ func TestFramingResponses(t *testing.T) {
 		{"HTTP/1.0 HEAD with Transfer-Encoding", http10(withCodings(response("HEAD", 200), "chunked")), None},
 		{"lowercase head is not HEAD", withLength(response("head", 200), 5), ContentLength},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			mode, err := Framing(test.msg)
@@ -111,6 +116,7 @@ func TestFramingErrors(t *testing.T) {
 		{"200 response to CONNECT", Message{Version: "1.1", IsResponse: true, RequestMethod: "CONNECT", StatusCode: 200}, ErrUnsupportedFraming},
 		{"299 response to CONNECT with Content-Length", Message{Version: "1.1", IsResponse: true, RequestMethod: "CONNECT", StatusCode: 299, ContentLength: 5, ContentLengthPresent: true}, ErrUnsupportedFraming},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			mode, err := Framing(test.msg)

@@ -28,6 +28,7 @@ func TestReadRequestTagsFailedStage(t *testing.T) {
 		{"invalid Host", "GET / HTTP/1.1\r\nHost: a b\r\n\r\n", StageFields, fields.ErrInvalidHost},
 		{"declared body too large", "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 9999999\r\n\r\n", StageBody, body.ErrBodyTooLarge},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			request, err := ReadRequest(bufio.NewReader(strings.NewReader(test.message)))

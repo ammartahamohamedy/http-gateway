@@ -10,6 +10,7 @@ func applyHostRule(values []string, line RequestLine, out *RequestFields) error 
 	if err != nil {
 		return err
 	}
+
 	out.Authority = fields.RequestAuthority(values[0], line.Method, line.RequestTarget)
 	return nil
 }
@@ -19,6 +20,7 @@ func applyContentLengthRule(values []string, _ RequestLine, out *RequestFields) 
 	if err != nil {
 		return err
 	}
+
 	out.ContentLength = length
 	out.ContentLengthPresent = present
 	return nil
@@ -29,9 +31,11 @@ func applyTransferEncodingRule(values []string, _ RequestLine, out *RequestField
 	if err != nil {
 		return err
 	}
+
 	if err := fields.ValidateRequestTransferCodings(codings); err != nil {
 		return err
 	}
+
 	out.TransferCodings = codings
 	return nil
 }
@@ -41,6 +45,7 @@ func applyTrailerRule(values []string, _ RequestLine, out *RequestFields) error 
 	if err != nil {
 		return err
 	}
+
 	out.TrailerNames = names
 	return nil
 }
@@ -50,6 +55,7 @@ func applyConnectionRule(values []string, _ RequestLine, out *RequestFields) err
 	if err != nil {
 		return err
 	}
+
 	out.ConnectionOptions = options
 	return nil
 }
@@ -59,6 +65,7 @@ func applyExpectRule(values []string, _ RequestLine, out *RequestFields) error {
 	if err != nil {
 		return err
 	}
+
 	out.Expectations = expectations
 	return nil
 }
@@ -84,6 +91,7 @@ func applyOriginRule(values []string, _ RequestLine, out *RequestFields) error {
 	if err != nil {
 		return err
 	}
+
 	out.Origin = origin
 	return nil
 }
@@ -93,6 +101,7 @@ func applyAccessControlRequestMethodRule(values []string, _ RequestLine, out *Re
 	if err != nil {
 		return err
 	}
+
 	out.AccessControlRequestMethod = method
 	return nil
 }
@@ -102,6 +111,7 @@ func applyAccessControlRequestHeadersRule(values []string, _ RequestLine, out *R
 	if err != nil {
 		return err
 	}
+
 	out.AccessControlRequestHeaders = names
 	return nil
 }
@@ -113,6 +123,7 @@ func checkFramingConflict(_ RequestLine, _ header.Headers, parsed RequestFields)
 	if parsed.ContentLengthPresent && len(parsed.TransferCodings) > 0 {
 		return fields.ErrFramingConflict
 	}
+
 	return nil
 }
 

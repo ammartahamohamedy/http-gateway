@@ -64,6 +64,7 @@ func ParseTransferEncoding(values []string) ([]string, error) {
 	if len(values) == 0 {
 		return nil, nil
 	}
+
 	var codings []string
 	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
@@ -78,9 +79,11 @@ func ParseTransferEncoding(values []string) ([]string, error) {
 			codings = append(codings, name)
 		}
 	}
+
 	if len(codings) == 0 {
 		return nil, ErrInvalidTransferEncoding
 	}
+
 	return codings, nil
 }
 
@@ -90,6 +93,7 @@ func ValidateRequestTransferCodings(codings []string) error {
 	if len(codings) > 0 && codings[len(codings)-1] != "chunked" {
 		return ErrChunkedNotFinal
 	}
+
 	return nil
 }
 
@@ -108,6 +112,7 @@ func CheckTransferCodingSupport(codings []string) error {
 		}
 		return fmt.Errorf("%w: %q", ErrUnknownTransferCoding, coding)
 	}
+
 	return nil
 }
 
@@ -120,23 +125,28 @@ func parseTransferCoding(member string) (string, bool) {
 	if !ok {
 		return "", false
 	}
+
 	name := grammar.TrimOWS(parts[0])
 	if !grammar.IsToken(name) {
 		return "", false
 	}
+
 	name = strings.ToLower(name)
 	if canonical, found := transferCodingAliases[name]; found {
 		name = canonical
 	}
+
 	parameters := parts[1:]
 	if name == "chunked" && len(parameters) > 0 {
 		return "", false
 	}
+
 	for parameter := range slices.Values(parameters) {
 		if !isTransferParameter(parameter) {
 			return "", false
 		}
 	}
+
 	return name, true
 }
 
@@ -148,6 +158,7 @@ func isTransferParameter(s string) bool {
 	if !found || !grammar.IsToken(grammar.TrimOWS(name)) {
 		return false
 	}
+
 	value = grammar.TrimOWS(value)
 	return grammar.IsToken(value) || grammar.IsQuotedString(value)
 }

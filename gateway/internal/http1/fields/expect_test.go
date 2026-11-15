@@ -29,6 +29,7 @@ func TestParseExpect(t *testing.T) {
 		{"value with empty parameters", []string{"x=1;;a=b;"}, []string{"x=1;;a=b;"}},
 		{"100-continue with value stays distinct", []string{"100-Continue=x"}, []string{"100-continue=x"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			expectations, err := ParseExpect(test.values)
@@ -64,6 +65,7 @@ func TestParseExpectRejectsInvalidValues(t *testing.T) {
 		{"NUL", []string{"x\x00"}},
 		{"invalid second line", []string{"x", "a b"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			expectations, err := ParseExpect(test.values)
@@ -101,6 +103,7 @@ func TestCheckExpectationSupport(t *testing.T) {
 		{"100-continue with value", []string{"100-continue=x"}, ErrUnsupportedExpectation},
 		{"unfamiliar after 100-continue", []string{"100-continue", "x-custom"}, ErrUnsupportedExpectation},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.ErrorIs(t, CheckExpectationSupport(test.expectations), test.want)

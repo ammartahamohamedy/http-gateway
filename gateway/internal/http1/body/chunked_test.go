@@ -46,6 +46,7 @@ func TestChunkedReaderDecodes(t *testing.T) {
 		{"several extensions", "5;a;b=c ; d\r\nhello\r\n0;last\r\n\r\n", "hello"},
 		{"trailers without callback", "5\r\nhello\r\n0\r\nX-Trailer: value\r\nY: z\r\n\r\n", "hello"},
 	}
+
 	for test := range slices.Values(tests) {
 		for fragmented := range slices.Values([]bool{false, true}) {
 			name := test.name
@@ -78,6 +79,7 @@ func TestChunkedReaderSmallBuffer(t *testing.T) {
 		}
 		require.NoError(t, err)
 	}
+
 	require.Equal(t, "hello world", string(content))
 }
 
@@ -107,6 +109,7 @@ func TestChunkedReaderRejectsMalformedFraming(t *testing.T) {
 		{"bare LF size line", "5\nhello\r\n0\r\n\r\n"},
 		{"size line too long", "5;" + strings.Repeat("a", maxChunkLineBytes) + "\r\nhello\r\n0\r\n\r\n"},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			_, _, err := decodeChunked(t, strings.NewReader(test.wire), chunkedTestLimit)
@@ -149,6 +152,7 @@ func TestChunkedReaderPrematureEOF(t *testing.T) {
 		{"before trailer end", "5\r\nhello\r\n0\r\n", "hello"},
 		{"inside trailers", "0\r\nX: v\r\n", ""},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			content, _, err := decodeChunked(t, strings.NewReader(test.wire), chunkedTestLimit)
@@ -173,6 +177,7 @@ func TestChunkedReaderLimit(t *testing.T) {
 		{"chunks over limit", "5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n", 10, "hello"},
 		{"negative limit", "1\r\na\r\n0\r\n\r\n", -1, ""},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			content, _, err := decodeChunked(t, strings.NewReader(test.wire), test.limit)
@@ -222,6 +227,7 @@ func TestChunkedReaderPassesTrailers(t *testing.T) {
 		{"trailers", "5\r\nhello\r\n0\r\nX-Checksum: abc\r\nx-checksum: def\r\nServer-Timing: db\r\n\r\n",
 			header.Headers{"x-checksum": {"abc", "def"}, "server-timing": {"db"}}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0

@@ -18,12 +18,15 @@ func parseHTTPVersion(rawVersion string) (string, error) {
 	if !httpVersionPattern.MatchString(rawVersion) {
 		return "", fmt.Errorf("http1: invalid HTTP version %q", rawVersion)
 	}
+
 	major, minor := rawVersion[len("HTTP/")], rawVersion[len("HTTP/1.")]
 	if major != '1' {
 		return "", fmt.Errorf("http1: unsupported HTTP version %q", rawVersion)
 	}
+
 	if minor == '0' {
 		return "1.0", nil
 	}
+
 	return "1.1", nil
 }

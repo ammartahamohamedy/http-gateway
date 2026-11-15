@@ -24,6 +24,7 @@ func TestParseContentLength(t *testing.T) {
 		{"many leading zeros", []string{strings.Repeat("0", 100) + "42"}, 42, true},
 		{"maximum int64", []string{"9223372036854775807"}, 9223372036854775807, true},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			length, present, err := ParseContentLength(test.values)
@@ -69,6 +70,7 @@ func TestParseContentLengthRejectsInvalidValues(t *testing.T) {
 		{"uint64 maximum", []string{"18446744073709551615"}},
 		{"very large numeral", []string{strings.Repeat("9", 8192)}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			length, present, err := ParseContentLength(test.values)

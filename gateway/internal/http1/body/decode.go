@@ -30,11 +30,13 @@ func Decode(framed io.ReadCloser, codings []string, maxBytes int64) io.ReadClose
 	if len(codings) == 0 {
 		return framed
 	}
+
 	var reader io.Reader = framed
 	for index := len(codings) - 1; index >= 0; index-- {
 		input := &endTracker{source: reader}
 		reader = &decodedReader{coding: codings[index], input: input, source: bufio.NewReader(input)}
 	}
+
 	return newLimitedBody(reader, framed, maxBytes)
 }
 
@@ -53,6 +55,7 @@ func (decoded *decodedReader) Read(buffer []byte) (int, error) {
 	if decoded.err != nil {
 		return 0, decoded.err
 	}
+
 	if decoded.decoder == nil {
 		entry, found := decoders[decoded.coding]
 		if !found {
@@ -70,6 +73,7 @@ func (decoded *decodedReader) Read(buffer []byte) (int, error) {
 		}
 		decoded.decoder = decoder
 	}
+
 	count, err := decoded.decoder.Read(buffer)
 	if errors.Is(err, io.EOF) {
 		err = decoded.checkStreamEnd()
@@ -77,6 +81,7 @@ func (decoded *decodedReader) Read(buffer []byte) (int, error) {
 	if err != nil {
 		decoded.err = decoded.classify(err)
 	}
+
 	return count, decoded.err
 }
 
@@ -89,6 +94,7 @@ func (decoded *decodedReader) checkStreamEnd() error {
 	case errors.Is(err, io.EOF):
 		return io.EOF
 	}
+
 	return err
 }
 
@@ -102,6 +108,7 @@ func (decoded *decodedReader) classify(err error) error {
 		// ErrInvalidCoding and never reads as an incomplete body.
 		return fmt.Errorf("%w: %s: %v", ErrInvalidCoding, decoded.coding, err)
 	}
+
 	return err
 }
 
@@ -116,5 +123,6 @@ func (tracker *endTracker) Read(buffer []byte) (int, error) {
 	if errors.Is(err, io.EOF) {
 		tracker.ended = true
 	}
+
 	return count, err
 }

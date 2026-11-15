@@ -26,23 +26,28 @@ func ValidateContentType(values []string) error {
 	if len(values) == 0 {
 		return nil
 	}
+
 	if len(values) != 1 {
 		return ErrInvalidContentType
 	}
+
 	parts, ok := grammar.SplitUnquoted(values[0], ';')
 	if !ok {
 		return ErrInvalidContentType
 	}
+
 	mediaType, subtype, found := strings.Cut(grammar.TrimOWS(parts[0]), "/")
 	if !found || !grammar.IsToken(mediaType) || !grammar.IsToken(subtype) {
 		return ErrInvalidContentType
 	}
+
 	for parameter := range slices.Values(parts[1:]) {
 		parameter = grammar.TrimOWS(parameter)
 		if parameter != "" && !grammar.IsParameter(parameter) {
 			return ErrInvalidContentType
 		}
 	}
+
 	return nil
 }
 
@@ -62,6 +67,7 @@ func ValidateAccept(values []string) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -73,6 +79,7 @@ func isAcceptMember(member string) bool {
 	if !ok || !isMediaRange(grammar.TrimOWS(parts[0])) {
 		return false
 	}
+
 	weighted := false
 	for parameter := range slices.Values(parts[1:]) {
 		parameter = grammar.TrimOWS(parameter)
@@ -92,6 +99,7 @@ func isAcceptMember(member string) bool {
 			return false
 		}
 	}
+
 	return true
 }
 
@@ -102,5 +110,6 @@ func isMediaRange(s string) bool {
 	if !found || !grammar.IsToken(mediaType) || !grammar.IsToken(subtype) {
 		return false
 	}
+
 	return mediaType != "*" || subtype == "*"
 }

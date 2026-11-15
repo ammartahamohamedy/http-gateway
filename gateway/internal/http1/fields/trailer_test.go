@@ -20,6 +20,7 @@ func TestParseTrailer(t *testing.T) {
 		{"repeated field lines form one list", []string{"a", "b"}, []string{"a", "b"}},
 		{"empty members ignored", []string{", a,, b ,"}, []string{"a", "b"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			names, err := ParseTrailer(test.values)
@@ -58,6 +59,7 @@ func TestIsAllowedTrailer(t *testing.T) {
 	for name := range slices.Values([]string{"x-checksum", "Server-Timing", "grpc-status"}) {
 		require.True(t, IsAllowedTrailer(name), name)
 	}
+
 	for name := range slices.Values([]string{"Content-Length", "TRANSFER-ENCODING", "host", "Trailer", "Authorization", "Content-Type"}) {
 		require.False(t, IsAllowedTrailer(name), name)
 	}

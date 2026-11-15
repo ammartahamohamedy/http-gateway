@@ -34,6 +34,7 @@ func ValidateContentEncoding(values []string) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -55,6 +56,7 @@ func ValidateAcceptEncoding(values []string) error {
 			}
 		}
 	}
+
 	return nil
 }
 
@@ -65,9 +67,11 @@ func isAcceptEncodingMember(member string) bool {
 	if !grammar.IsToken(grammar.TrimOWS(coding)) {
 		return false
 	}
+
 	if !weighted {
 		return true
 	}
+
 	name, qvalue, found := strings.Cut(grammar.TrimOWS(weight), "=")
 	return found && (name == "q" || name == "Q") && grammar.IsQValue(qvalue)
 }

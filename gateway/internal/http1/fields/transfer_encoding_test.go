@@ -35,6 +35,7 @@ func TestParseTransferEncoding(t *testing.T) {
 		{"deprecated gzip alias", []string{"X-Gzip, chunked"}, []string{"gzip", "chunked"}},
 		{"deprecated compress alias", []string{"x-compress, chunked"}, []string{"compress", "chunked"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			codings, err := ParseTransferEncoding(test.values)
@@ -75,6 +76,7 @@ func TestParseTransferEncodingRejectsInvalidValues(t *testing.T) {
 		{"text after quoted parameter", []string{`x;a="1"b, chunked`}},
 		{"control byte in quoted parameter", []string{"x;a=\"\x01\", chunked"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			codings, err := ParseTransferEncoding(test.values)
@@ -103,6 +105,7 @@ func TestValidateRequestTransferCodings(t *testing.T) {
 		{"final coding not chunked", []string{"gzip"}, ErrChunkedNotFinal},
 		{"chunked before another coding", []string{"chunked", "gzip"}, ErrChunkedNotFinal},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.ErrorIs(t, ValidateRequestTransferCodings(test.codings), test.want)
@@ -130,6 +133,7 @@ func TestCheckTransferCodingSupport(t *testing.T) {
 		{"reserved name", []string{"trailers, chunked"}, ErrUnsupportedTransferCoding},
 		{"unlisted", []string{"x-custom, chunked"}, ErrUnknownTransferCoding},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			codings, err := ParseTransferEncoding(test.values)

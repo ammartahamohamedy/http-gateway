@@ -30,6 +30,7 @@ func TestValidateRequestHost(t *testing.T) {
 		{"empty CONNECT", []string{""}, "CONNECT", "example.com:443", ErrInvalidHost},
 		{"empty asterisk", []string{""}, "OPTIONS", "*", ErrInvalidHost},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			err := ValidateRequestHost(test.values, test.method, test.requestTarget)
@@ -55,6 +56,7 @@ func TestValidateHostValue(t *testing.T) {
 			require.NoError(t, validateHostValue(value))
 		})
 	}
+
 	for value := range slices.Values([]string{
 		"example.com, other.example", "a b", "a\tb", "example.com\r\n",
 		"user@example.com", "http://example.com", "example.com/path",
@@ -89,6 +91,7 @@ func TestRequestAuthority(t *testing.T) {
 		{"scheme case", "other.example", "GET", "HTTP://Target.Example/", "Target.Example"},
 		{"authority-less absolute", "", "GET", "urn:example:item", ""},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			require.NoError(t, ValidateRequestHost([]string{test.host}, test.method, test.requestTarget))

@@ -40,6 +40,7 @@ var forbiddenTrailerFields = []string{
 // not changed.
 func ParseTrailer(values []string) ([]string, error) {
 	var names []string
+
 	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
@@ -52,6 +53,7 @@ func ParseTrailer(values []string) ([]string, error) {
 			names = append(names, strings.ToLower(member))
 		}
 	}
+
 	return names, nil
 }
 
@@ -63,6 +65,7 @@ func ValidateTrailerNames(names []string) error {
 			return fmt.Errorf("%w: %q", ErrForbiddenTrailerField, name)
 		}
 	}
+
 	return nil
 }
 

@@ -129,6 +129,7 @@ func TestReadRequestValidatesHost(t *testing.T) {
 		{"malformed IPv6", "GET / HTTP/1.1", "Host: [2001:db8::g]", "", fields.ErrInvalidHost},
 		{"fold inside authority", "GET / HTTP/1.1", "Host: example.\r\n com", "", fields.ErrInvalidHost},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			section := "\r\n"
@@ -174,6 +175,7 @@ func TestReadRequestValidatesContentLength(t *testing.T) {
 		{"conflicting comma list", "Content-Length: 4, 5\r\n", nil, fields.ErrInvalidContentLength},
 		{"overflow", "Content-Length: 9223372036854775808\r\n", nil, fields.ErrInvalidContentLength},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			const remainder = "body\x00bytes\r\n"
@@ -234,6 +236,7 @@ func TestReadRequestErrors(t *testing.T) {
 		{"header line limit", strings.NewReader("GET / HTTP/1.1\r\nX:" + strings.Repeat("a", requestHeaderLimits.LineBytes) + "\r\n"), header.ErrLineTooLong},
 		{"header count limit", strings.NewReader("GET / HTTP/1.1\r\n" + strings.Repeat("X: a\r\n", requestHeaderLimits.Fields+1) + "\r\n"), header.ErrTooManyFields},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			request, err := ReadRequest(bufio.NewReader(test.reader))
@@ -257,11 +260,13 @@ func TestReadRequestBeforeConnectionCloses(t *testing.T) {
 		request *Request
 		err     error
 	}
+
 	parsed := make(chan result, 1)
 	go func() {
 		request, err := ReadRequest(bufio.NewReader(source))
 		parsed <- result{request, err}
 	}()
+
 	written := make(chan error, 1)
 	go func() {
 		_, err := io.WriteString(client, "GET /live HTTP/1.1\r\nHost: example.com\r\n\r\n")
@@ -276,6 +281,7 @@ func TestReadRequestBeforeConnectionCloses(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "parser waited for connection EOF after complete headers")
 	}
+
 	select {
 	case err := <-written:
 		require.NoError(t, err)
@@ -298,6 +304,7 @@ func TestReadRequestHeadersAndUnfolding(t *testing.T) {
 		"x-bytes":    {"\x80\xff\xc3"},
 		"set-cookie": {"a=1; Expires=Wed, 09 Jun 2027 10:18:14 GMT", "b=2"},
 	}
+
 	for test := range slices.Values([]struct {
 		name   string
 		reader io.Reader

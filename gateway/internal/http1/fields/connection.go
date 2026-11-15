@@ -31,6 +31,7 @@ var protectedConnectionOptions = []string{"host", "content-length", "transfer-en
 // connection persistence. The input is not changed.
 func ParseConnection(values []string) ([]string, error) {
 	var options []string
+
 	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
 		if !ok {
@@ -43,6 +44,7 @@ func ParseConnection(values []string) ([]string, error) {
 			options = append(options, strings.ToLower(member))
 		}
 	}
+
 	return options, nil
 }
 
@@ -57,5 +59,6 @@ func ValidateConnectionOptions(options []string) error {
 			return ErrProtectedConnectionOption
 		}
 	}
+
 	return nil
 }

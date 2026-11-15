@@ -29,10 +29,12 @@ func ValidateRequestHost(values []string, method, requestTarget string) error {
 	if len(values) != 1 {
 		return ErrInvalidHost
 	}
+
 	value := values[0]
 	if err := validateHostValue(value); err != nil {
 		return err
 	}
+
 	if value == "" || value[0] == ':' {
 		if value != "" || method == "CONNECT" {
 			return ErrInvalidHost
@@ -42,6 +44,7 @@ func ValidateRequestHost(values []string, method, requestTarget string) error {
 			return ErrInvalidHost
 		}
 	}
+
 	return nil
 }
 
@@ -55,9 +58,11 @@ func RequestAuthority(hostValue, method, requestTarget string) string {
 	if method == "CONNECT" {
 		return requestTarget
 	}
+
 	if requestTarget == "*" || strings.HasPrefix(requestTarget, "/") {
 		return hostValue
 	}
+
 	// Slice the raw authority rather than using url.URL.Host, which decodes
 	// percent escapes in reg-name hosts.
 	_, rest, _ := strings.Cut(requestTarget, ":")
@@ -65,15 +70,19 @@ func RequestAuthority(hostValue, method, requestTarget string) string {
 	if !found {
 		return hostValue
 	}
+
 	if end := strings.IndexAny(authority, "/?"); end >= 0 {
 		authority = authority[:end]
 	}
+
 	if at := strings.LastIndexByte(authority, '@'); at >= 0 {
 		authority = authority[at+1:]
 	}
+
 	if authority == "" {
 		return hostValue
 	}
+
 	return authority
 }
 
@@ -85,13 +94,16 @@ func validateHostValue(value string) error {
 	if parts == nil {
 		return ErrInvalidHost
 	}
+
 	literal := parts[1]
 	if literal == "" || ipvFuturePattern.MatchString(literal) {
 		return nil
 	}
+
 	address, err := netip.ParseAddr(literal)
 	if err != nil || !address.Is6() || address.Zone() != "" {
 		return ErrInvalidHost
 	}
+
 	return nil
 }

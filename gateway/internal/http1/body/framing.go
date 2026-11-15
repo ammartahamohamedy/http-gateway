@@ -65,9 +65,11 @@ func Framing(msg Message) (Mode, error) {
 	if msg.Version != "1.0" && msg.Version != "1.1" {
 		return Unknown, fmt.Errorf("%w: version %q is not 1.0 or 1.1", ErrInvalidFraming, msg.Version)
 	}
+
 	if msg.ContentLengthPresent && msg.ContentLength < 0 {
 		return Unknown, fmt.Errorf("%w: negative Content-Length %d", ErrInvalidFraming, msg.ContentLength)
 	}
+
 	if msg.IsResponse {
 		if msg.StatusCode < 100 || msg.StatusCode > 599 {
 			return Unknown, fmt.Errorf("%w: status %d is outside 100-599", ErrInvalidFraming, msg.StatusCode)
@@ -79,6 +81,7 @@ func Framing(msg Message) (Mode, error) {
 			return Unknown, fmt.Errorf("%w: tunnel after a 2xx response to CONNECT", ErrUnsupportedFraming)
 		}
 	}
+
 	if len(msg.TransferCodings) > 0 {
 		if msg.Version == "1.0" {
 			return Unknown, fmt.Errorf("%w: Transfer-Encoding in an HTTP/1.0 message", ErrInvalidFraming)
@@ -91,11 +94,14 @@ func Framing(msg Message) (Mode, error) {
 		}
 		return Unknown, fmt.Errorf("%w: request Transfer-Encoding does not end in chunked", ErrInvalidFraming)
 	}
+
 	if msg.ContentLengthPresent {
 		return ContentLength, nil
 	}
+
 	if msg.IsResponse {
 		return UntilClose, nil
 	}
+
 	return None, nil
 }

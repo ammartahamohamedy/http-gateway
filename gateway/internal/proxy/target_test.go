@@ -52,6 +52,7 @@ func TestCheckRequestTarget(t *testing.T) {
 		{"encoded dot", "GET /%2E/b HTTP/1.1", "example.com", ErrAmbiguousPath},
 		{"absolute dot-dot", "GET http://example.com/a/../b HTTP/1.1", "example.com", ErrAmbiguousPath},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			message := test.startLine + "\r\nHost: " + test.host + "\r\n\r\n"

@@ -52,6 +52,7 @@ func HandleConnection(connection net.Conn) {
 		log.Printf("rejecting request: %v", err)
 		return
 	}
+
 	if err := fields.CheckExpectationSupport(request.Fields.Expectations); err != nil {
 		// TODO: Respond 417 before closing.
 		log.Printf("rejecting request: %v", err)

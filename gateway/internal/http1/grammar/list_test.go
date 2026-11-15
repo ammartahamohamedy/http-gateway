@@ -23,6 +23,7 @@ func TestSplitList(t *testing.T) {
 		{"escaped backslash ends quoting", `a;x="1\\",b`, []string{`a;x="1\\"`, "b"}},
 		{"backslash outside quotes is ordinary", `a\,b`, []string{`a\`, "b"}},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			members, ok := SplitList(test.value)
@@ -59,6 +60,7 @@ func TestIsQuotedString(t *testing.T) {
 	for s := range slices.Values([]string{`""`, `"a b"`, "\"a\tb\"", `"a\"b"`, `"a\\"`, `"(,;=)"`, "\"\x80\xff\"", "\"\\\xff\""}) {
 		require.True(t, IsQuotedString(s), "%q", s)
 	}
+
 	for s := range slices.Values([]string{"", `"`, `a`, `"a`, `a"`, `"a"b"`, `"a\"`, "\"a\x00\"", "\"a\x7f\"", "\"a\nb\"", "\"\\\x01\""}) {
 		require.False(t, IsQuotedString(s), "%q", s)
 	}
@@ -68,6 +70,7 @@ func TestIsParameter(t *testing.T) {
 	for s := range slices.Values([]string{"a=b", `a="b c"`, `a="x=y"`, `a=""`}) {
 		require.True(t, IsParameter(s), "%q", s)
 	}
+
 	for s := range slices.Values([]string{"", "a", "=b", "a=", "a =b", "a= b", "a=b=c", `a="b`, `"a"=b`}) {
 		require.False(t, IsParameter(s), "%q", s)
 	}
@@ -77,6 +80,7 @@ func TestIsChunkExtension(t *testing.T) {
 	for s := range slices.Values([]string{"a", "a=b", "a = b", "a=\t\"b;c\"", `a="x=y"`, `a=""`}) {
 		require.True(t, IsChunkExtension(s), "%q", s)
 	}
+
 	for s := range slices.Values([]string{"", " a", "a ", "=b", "a=", "a b", "a=b c", "a=b=c", `a="b`, `"a"=b`}) {
 		require.False(t, IsChunkExtension(s), "%q", s)
 	}

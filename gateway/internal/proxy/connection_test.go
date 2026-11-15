@@ -21,6 +21,7 @@ func serve(t *testing.T) (net.Conn, <-chan struct{}) {
 		defer close(done)
 		HandleConnection(server)
 	}()
+
 	return client, done
 }
 

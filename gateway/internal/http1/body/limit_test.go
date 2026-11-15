@@ -23,6 +23,7 @@ func TestLimitedBody(t *testing.T) {
 		{"zero limit", 0, "", ErrBodyTooLarge},
 		{"negative limit", -1, "", ErrBodyTooLarge},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			reader := newLimitedBody(strings.NewReader("hello world"), io.NopCloser(nil), test.limit)

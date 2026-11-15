@@ -41,6 +41,7 @@ func TestReadRequestAttachesBody(t *testing.T) {
 		{"Content-Length zero", "Content-Length: 0\r\n", "NEXT", "", "NEXT"},
 		{"Content-Length", "Content-Length: 7\r\n", "he\x00\r\nlo" + "NEXT", "he\x00\r\nlo", "NEXT"},
 	}
+
 	for test := range slices.Values(tests) {
 		for fragmented := range slices.Values([]bool{false, true}) {
 			t.Run(test.name+"/fragmented="+strconv.FormatBool(fragmented), func(t *testing.T) {
@@ -136,6 +137,7 @@ func TestReadRequestTrailers(t *testing.T) {
 		{"forbidden trailers dropped", "X-Checksum: abc\r\nContent-Length: 50\r\nHost: evil.example\r\n", header.Headers{"x-checksum": {"abc"}}},
 		{"only forbidden trailers", "Transfer-Encoding: chunked\r\n", nil},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			request, err := ReadRequest(bufio.NewReader(strings.NewReader(head + test.trailers + "\r\n")))

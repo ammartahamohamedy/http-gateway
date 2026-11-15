@@ -27,15 +27,18 @@ func (limited *limitedBody) Read(buffer []byte) (int, error) {
 	if err := limited.checkOpen(); err != nil {
 		return 0, err
 	}
+
 	if limited.err != nil {
 		return 0, limited.err
 	}
+
 	count, err := limited.limited.Read(buffer)
 	if limited.limited.N == 0 {
 		// The last byte read is the one past the limit, so it is withheld.
 		limited.err = fmt.Errorf("%w: data exceeds %d bytes", ErrBodyTooLarge, limited.limit)
 		return count - 1, limited.err
 	}
+
 	limited.err = err
 	return count, err
 }

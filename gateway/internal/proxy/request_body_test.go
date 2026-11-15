@@ -23,11 +23,13 @@ func readBodyOverPipe(t *testing.T, head string, send func(client net.Conn)) (ne
 		_ = client.Close()
 		_ = server.Close()
 	})
+
 	go func() {
 		if _, err := client.Write([]byte(head)); err == nil {
 			send(client)
 		}
 	}()
+
 	request, err := http1.ReadRequest(bufio.NewReader(server))
 	require.NoError(t, err)
 	return server, request
@@ -49,6 +51,7 @@ func TestReadRequestBody(t *testing.T) {
 		{"no body", "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", ""},
 		{"Content-Length body", "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 7\r\n\r\n", "he\x00\r\nlo"},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			setBodyTimeouts(t, 2*time.Second, 2*time.Second)
@@ -72,6 +75,7 @@ func TestReadRequestBodySendsContinue(t *testing.T) {
 		interim <- string(response)
 		_, _ = client.Write([]byte("hello"))
 	})
+
 	content, err := readRequestBody(server, request)
 	require.NoError(t, err)
 	require.Equal(t, "hello", string(content))
@@ -88,6 +92,7 @@ func TestReadRequestBodyDecodesChunked(t *testing.T) {
 		interim <- string(response)
 		_, _ = client.Write([]byte("5\r\nhello\r\n0\r\n\r\n"))
 	})
+
 	content, err := readRequestBody(server, request)
 	require.NoError(t, err)
 	require.Equal(t, "hello", string(content))
@@ -100,6 +105,7 @@ func TestReadRequestBodyIdleTimeout(t *testing.T) {
 	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
 		_, _ = client.Write([]byte("he"))
 	})
+
 	_, err := readRequestBody(server, request)
 	require.ErrorIs(t, err, os.ErrDeadlineExceeded)
 }
@@ -111,6 +117,7 @@ func TestReadRequestBodyTruncated(t *testing.T) {
 		_, _ = client.Write([]byte("he"))
 		_ = client.Close()
 	})
+
 	content, err := readRequestBody(server, request)
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	require.Equal(t, "he", string(content))
@@ -132,6 +139,7 @@ func TestReadRequestBodyToleratesSlowSender(t *testing.T) {
 	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
 		trickle(client, "hello!", 50*time.Millisecond)
 	})
+
 	content, err := readRequestBody(server, request)
 	require.NoError(t, err, "a steady sender may take longer than one idle timeout overall")
 	require.Equal(t, "hello!", string(content))
@@ -143,6 +151,7 @@ func TestReadRequestBodyOverallTimeout(t *testing.T) {
 	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
 		trickle(client, strings.Repeat("a", 100), 20*time.Millisecond)
 	})
+
 	_, err := readRequestBody(server, request)
 	require.ErrorIs(t, err, os.ErrDeadlineExceeded)
 }

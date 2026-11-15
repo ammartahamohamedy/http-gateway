@@ -22,6 +22,7 @@ func TestRequestLineTargetForm(t *testing.T) {
 		{"OPTIONS * HTTP/1.1", AsteriskForm},
 		{"OPTIONS /path HTTP/1.1", OriginForm},
 	}
+
 	for test := range slices.Values(tests) {
 		t.Run(test.rawLine, func(t *testing.T) {
 			line, err := parseRequestLine(test.rawLine)

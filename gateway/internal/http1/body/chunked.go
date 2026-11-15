@@ -49,17 +49,21 @@ func (chunked *chunkedReader) Read(buffer []byte) (int, error) {
 	if err := chunked.checkOpen(); err != nil {
 		return 0, err
 	}
+
 	if chunked.err != nil {
 		return 0, chunked.err
 	}
+
 	if chunked.remaining == 0 {
 		if chunked.err = chunked.nextChunk(); chunked.err != nil {
 			return 0, chunked.err
 		}
 	}
+
 	if int64(len(buffer)) > chunked.remaining {
 		buffer = buffer[:chunked.remaining]
 	}
+
 	count, err := chunked.source.Read(buffer)
 	chunked.remaining -= int64(count)
 	switch {
@@ -70,6 +74,7 @@ func (chunked *chunkedReader) Read(buffer []byte) (int, error) {
 	case err != nil:
 		chunked.err = err
 	}
+
 	return count, chunked.err
 }
 
@@ -80,10 +85,12 @@ func (chunked *chunkedReader) nextChunk() error {
 	if err != nil {
 		return chunkLineError(err)
 	}
+
 	size, ok := parseChunkLine(line)
 	if !ok {
 		return fmt.Errorf("%w: malformed chunk-size line", ErrInvalidFraming)
 	}
+
 	if size == 0 {
 		trailers, err := header.ReadHeadersSection(chunked.source, trailerLimits)
 		if err != nil {
@@ -94,9 +101,11 @@ func (chunked *chunkedReader) nextChunk() error {
 		}
 		return io.EOF
 	}
+
 	if size > chunked.allowance {
 		return ErrBodyTooLarge
 	}
+
 	chunked.allowance -= size
 	chunked.remaining = size
 	return nil
@@ -112,9 +121,11 @@ func readDataTerminator(source *bufio.Reader) error {
 		}
 		return err
 	}
+
 	if terminator != [2]byte{'\r', '\n'} {
 		return fmt.Errorf("%w: chunk data not followed by CRLF", ErrInvalidFraming)
 	}
+
 	return nil
 }
 
@@ -126,6 +137,7 @@ func chunkLineError(err error) error {
 	case errors.Is(err, lineio.ErrLineTooLong), errors.Is(err, lineio.ErrInvalidLineEnding):
 		return fmt.Errorf("%w: %w", ErrInvalidFraming, err)
 	}
+
 	return err
 }
 
@@ -138,17 +150,21 @@ func parseChunkLine(line string) (int64, bool) {
 	if !ok {
 		return 0, false
 	}
+
 	sizeText := parts[0]
 	if len(parts) > 1 {
 		sizeText = strings.TrimRight(sizeText, " \t")
 	}
+
 	if !grammar.IsHexDigits(sizeText) {
 		return 0, false
 	}
+
 	size, err := strconv.ParseInt(sizeText, 16, 64)
 	if err != nil {
 		return 0, false
 	}
+
 	extensions := parts[1:]
 	for index, extension := range extensions {
 		if index == len(extensions)-1 && extension != strings.TrimRight(extension, " \t") {
@@ -158,5 +174,6 @@ func parseChunkLine(line string) (int64, bool) {
 			return 0, false
 		}
 	}
+
 	return size, true
 }

@@ -107,15 +107,18 @@ var requestCrossChecks = []requestCrossCheck{
 // returns zero RequestFields so partially parsed metadata cannot escape.
 func processRequestFields(line RequestLine, headers header.Headers) (RequestFields, error) {
 	var parsed RequestFields
+
 	for rule := range slices.Values(requestFieldRules) {
 		if err := rule.apply(headers.Values(rule.name), line, &parsed); err != nil {
 			return RequestFields{}, &FieldError{Name: rule.name, Err: err}
 		}
 	}
+
 	for check := range slices.Values(requestCrossChecks) {
 		if err := check.apply(line, headers, parsed); err != nil {
 			return RequestFields{}, &FieldError{Name: check.name, Err: err}
 		}
 	}
+
 	return parsed, nil
 }

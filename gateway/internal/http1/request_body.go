@@ -25,6 +25,7 @@ func requestBody(reader *bufio.Reader, request *Request) (io.ReadCloser, error) 
 	if err != nil {
 		return nil, err
 	}
+
 	switch mode {
 	case body.None:
 		return body.NewFixedReader(reader, 0), nil
@@ -41,6 +42,7 @@ func requestBody(reader *bufio.Reader, request *Request) (io.ReadCloser, error) 
 		codings := parsed.TransferCodings[:len(parsed.TransferCodings)-1]
 		return body.Decode(chunked, codings, maxRequestBodyBytes), nil
 	}
+
 	return nil, fmt.Errorf("http1: unexpected request body framing %d", mode)
 }
 
@@ -51,8 +53,10 @@ func allowedTrailers(trailers header.Headers) header.Headers {
 	maps.DeleteFunc(allowed, func(name string, _ []string) bool {
 		return !fields.IsAllowedTrailer(name)
 	})
+
 	if len(allowed) == 0 {
 		return nil
 	}
+
 	return allowed
 }

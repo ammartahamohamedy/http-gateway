@@ -16,6 +16,7 @@ func TestCanDecode(t *testing.T) {
 	for coding := range slices.Values([]string{"gzip", "deflate"}) {
 		require.True(t, CanDecode(coding), coding)
 	}
+
 	for coding := range slices.Values([]string{"chunked", "compress", "x-gzip", "GZIP", ""}) {
 		require.False(t, CanDecode(coding), coding)
 	}

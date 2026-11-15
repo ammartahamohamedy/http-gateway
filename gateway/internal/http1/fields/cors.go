@@ -36,20 +36,25 @@ func ParseOrigin(values []string) (string, error) {
 	if len(values) == 0 {
 		return "", nil
 	}
+
 	if len(values) != 1 {
 		return "", ErrInvalidOrigin
 	}
+
 	origin := values[0]
 	if origin == "null" {
 		return origin, nil
 	}
+
 	scheme, authority, found := strings.Cut(origin, "://")
 	if !found || !originSchemePattern.MatchString(scheme) {
 		return "", ErrInvalidOrigin
 	}
+
 	if authority == "" || authority[0] == ':' || validateHostValue(authority) != nil {
 		return "", ErrInvalidOrigin
 	}
+
 	return origin, nil
 }
 
@@ -62,9 +67,11 @@ func ParseAccessControlRequestMethod(values []string) (string, error) {
 	if len(values) == 0 {
 		return "", nil
 	}
+
 	if len(values) != 1 || !grammar.IsToken(values[0]) {
 		return "", ErrInvalidAccessControlRequestMethod
 	}
+
 	return values[0], nil
 }
 
@@ -79,6 +86,7 @@ func ParseAccessControlRequestHeaders(values []string) ([]string, error) {
 	if len(values) == 0 {
 		return nil, nil
 	}
+
 	var names []string
 	for value := range slices.Values(values) {
 		members, ok := grammar.SplitList(value)
@@ -92,8 +100,10 @@ func ParseAccessControlRequestHeaders(values []string) ([]string, error) {
 			names = append(names, strings.ToLower(member))
 		}
 	}
+
 	if len(names) == 0 {
 		return nil, ErrInvalidAccessControlRequestHeaders
 	}
+
 	return names, nil
 }

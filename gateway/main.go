@@ -18,6 +18,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	defer func() {
 		if err := listener.Close(); err != nil {
 			log.Printf("closing listener: %v", err)

@@ -23,12 +23,15 @@ func ParseContentLength(values []string) (length int64, present bool, err error)
 	if len(values) == 0 {
 		return 0, false, nil
 	}
+
 	if len(values) != 1 || !grammar.IsDigits(values[0]) {
 		return 0, true, ErrInvalidContentLength
 	}
+
 	length, err = strconv.ParseInt(values[0], 10, 64)
 	if err != nil {
 		return 0, true, ErrInvalidContentLength
 	}
+
 	return length, true, nil
 }
