@@ -38,6 +38,7 @@ func TestChunkedReaderDecodes(t *testing.T) {
 		{"uppercase hex", "A\r\n0123456789\r\n0\r\n\r\n", "0123456789"},
 		{"lowercase hex", "a\r\n0123456789\r\n0\r\n\r\n", "0123456789"},
 		{"leading zeros", "0005\r\nhello\r\n000\r\n\r\n", "hello"},
+		{"many leading zeros", strings.Repeat("0", 4000) + "5\r\nhello\r\n0\r\n\r\n", "hello"},
 		{"extension name", "5;name\r\nhello\r\n0\r\n\r\n", "hello"},
 		{"extension value", "5;name=value\r\nhello\r\n0\r\n\r\n", "hello"},
 		{"extension BWS", "5 ;\tname = value\r\nhello\r\n0\r\n\r\n", "hello"},
