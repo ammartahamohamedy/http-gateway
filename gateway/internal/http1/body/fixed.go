@@ -11,37 +11,24 @@ import (
 // (RFC 9112, Section 8). A negative length is treated as zero. Close stops
 // further reads without closing or draining source.
 func NewFixedReader(source io.Reader, length int64) io.ReadCloser {
-	return &fixedReader{source: source, remaining: max(length, 0)}
+	return &fixedReader{limited: io.LimitedReader{R: source, N: max(length, 0)}}
 }
 
 type fixedReader struct {
-	source    io.Reader
-	remaining int64
-	closed    bool
+	closeGuard
+	limited io.LimitedReader
 }
 
 func (fixed *fixedReader) Read(buffer []byte) (int, error) {
-	if fixed.closed {
-		return 0, ErrBodyClosed
+	if err := fixed.checkOpen(); err != nil {
+		return 0, err
 	}
-	if fixed.remaining == 0 {
-		return 0, io.EOF
-	}
-	if int64(len(buffer)) > fixed.remaining {
-		buffer = buffer[:fixed.remaining]
-	}
-	count, err := fixed.source.Read(buffer)
-	fixed.remaining -= int64(count)
+	count, err := fixed.limited.Read(buffer)
 	switch {
-	case fixed.remaining == 0:
+	case fixed.limited.N == 0:
 		return count, io.EOF
 	case errors.Is(err, io.EOF):
 		return count, io.ErrUnexpectedEOF
 	}
 	return count, err
-}
-
-func (fixed *fixedReader) Close() error {
-	fixed.closed = true
-	return nil
 }

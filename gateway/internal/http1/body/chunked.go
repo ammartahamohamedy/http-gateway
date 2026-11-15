@@ -37,17 +37,17 @@ func NewChunkedReader(source *bufio.Reader, maxBytes int64, onTrailers func(head
 }
 
 type chunkedReader struct {
+	closeGuard
 	source     *bufio.Reader
 	onTrailers func(header.Headers)
 	allowance  int64 // decoded bytes still permitted
 	remaining  int64 // data bytes left in the current chunk
 	err        error // sticky; io.EOF after the last chunk and trailers
-	closed     bool
 }
 
 func (chunked *chunkedReader) Read(buffer []byte) (int, error) {
-	if chunked.closed {
-		return 0, ErrBodyClosed
+	if err := chunked.checkOpen(); err != nil {
+		return 0, err
 	}
 	if chunked.err != nil {
 		return 0, chunked.err
@@ -71,11 +71,6 @@ func (chunked *chunkedReader) Read(buffer []byte) (int, error) {
 		chunked.err = err
 	}
 	return count, chunked.err
-}
-
-func (chunked *chunkedReader) Close() error {
-	chunked.closed = true
-	return nil
 }
 
 // nextChunk reads a chunk-size line. The last chunk is followed by the trailer

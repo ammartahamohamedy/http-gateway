@@ -119,11 +119,12 @@ func TestDecodeTruncatedGzip(t *testing.T) {
 func TestDecodeLimitsDecodedData(t *testing.T) {
 	bomb := gzipBytes(t, make([]byte, 4*decodeTestLimit))
 	require.Less(t, len(bomb), decodeTestLimit/100, "the encoded body is small")
-	_, err := decodeAll(bomb, []string{"gzip"}, decodeTestLimit)
+	content, err := decodeAll(bomb, []string{"gzip"}, decodeTestLimit)
 	require.ErrorIs(t, err, ErrBodyTooLarge)
+	require.Len(t, content, decodeTestLimit, "only data within the limit is returned")
 
 	exact := gzipBytes(t, make([]byte, decodeTestLimit))
-	content, err := decodeAll(exact, []string{"gzip"}, decodeTestLimit)
+	content, err = decodeAll(exact, []string{"gzip"}, decodeTestLimit)
 	require.NoError(t, err)
 	require.Len(t, content, decodeTestLimit)
 

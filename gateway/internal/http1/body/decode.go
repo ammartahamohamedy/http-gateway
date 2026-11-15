@@ -66,7 +66,7 @@ func Decode(framed io.ReadCloser, codings []string, maxBytes int64) io.ReadClose
 		reader = &decodedReader{coding: codings[index], input: input, source: bufio.NewReader(input)}
 	}
 	limit := max(maxBytes, 0)
-	return &limitedBody{source: reader, closer: framed, limit: limit, remaining: limit}
+	return &limitedBody{limited: io.LimitedReader{R: reader, N: limit + 1}, framed: framed, limit: limit}
 }
 
 // decodedReader decodes one coding. Its source is buffered so the decoder,
@@ -153,42 +153,34 @@ func (tracker *endTracker) Read(buffer []byte) (int, error) {
 }
 
 // limitedBody caps decoded data, so a small encoded body cannot expand without
-// bound, and closes the framed body.
+// bound, and closes the framed body. Its reader allows one byte past limit:
+// reading that byte proves the data is too large.
 type limitedBody struct {
-	source    io.Reader
-	closer    io.Closer
-	limit     int64
-	remaining int64
-	err       error // sticky
-	closed    bool
+	closeGuard
+	limited io.LimitedReader // N starts at limit + 1
+	framed  io.Closer
+	limit   int64
+	err     error // sticky
 }
 
 func (limited *limitedBody) Read(buffer []byte) (int, error) {
-	if limited.closed {
-		return 0, ErrBodyClosed
+	if err := limited.checkOpen(); err != nil {
+		return 0, err
 	}
 	if limited.err != nil {
 		return 0, limited.err
 	}
-	if limited.remaining == 0 {
-		var probe [1]byte
-		count, err := limited.source.Read(probe[:])
-		if count > 0 {
-			err = fmt.Errorf("%w: decoded data exceeds %d bytes", ErrBodyTooLarge, limited.limit)
-		}
-		limited.err = err
-		return 0, err
+	count, err := limited.limited.Read(buffer)
+	if limited.limited.N == 0 {
+		// The last byte read is the one past the limit, so it is withheld.
+		limited.err = fmt.Errorf("%w: decoded data exceeds %d bytes", ErrBodyTooLarge, limited.limit)
+		return count - 1, limited.err
 	}
-	if int64(len(buffer)) > limited.remaining {
-		buffer = buffer[:limited.remaining]
-	}
-	count, err := limited.source.Read(buffer)
-	limited.remaining -= int64(count)
 	limited.err = err
 	return count, err
 }
 
 func (limited *limitedBody) Close() error {
-	limited.closed = true
-	return limited.closer.Close()
+	_ = limited.closeGuard.Close()
+	return limited.framed.Close()
 }
