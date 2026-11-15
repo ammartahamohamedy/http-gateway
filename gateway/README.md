@@ -11,7 +11,7 @@ the current executable parses only the request head as described below.
 
 ## Current usage
 
-The program parses one HTTP/1.1 request per TCP connection: it validates the request head and its supported fields, applies the gateway's transfer-coding, request-target, and `Expect` policy, reads a Content-Length or chunked body of up to 1 MiB within 30 seconds (sending `100 Continue` when the client expects it; chunk extensions are ignored; trailers are kept, minus fields forbidden as trailers, but not forwarded yet), prints the request-line fields, effective authority, and body size, and closes the connection. Connections are handled one at a time. The gzip and deflate transfer codings are accepted but not decoded yet, nothing is forwarded, and the server sends no final HTTP response.
+The program parses one HTTP/1.1 request per TCP connection: it validates the request head and its supported fields, applies the gateway's transfer-coding, request-target, and `Expect` policy, reads a Content-Length or chunked body of up to 1 MiB, allowing pauses of up to 30 seconds and 5 minutes in total (sending `100 Continue` when the client expects it; chunk extensions are ignored; trailers are kept, minus fields forbidden as trailers, but not forwarded yet), prints the request-line fields, effective authority, and body size, and closes the connection. Connections are handled one at a time. The gzip and deflate transfer codings are accepted but not decoded yet, nothing is forwarded, and the server sends no final HTTP response.
 
 The target policy accepts origin-form, `http`/`https` absolute-form, and `OPTIONS *`. It rejects CONNECT, other schemes, ports outside 1–65535, paths starting with `//`, and `.`/`..` segments, including percent-encoded ones.
 

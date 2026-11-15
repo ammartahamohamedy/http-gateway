@@ -6,6 +6,7 @@ import (
 	"net"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -100,11 +101,11 @@ func readBodyOverPipe(t *testing.T, head string, send func(client net.Conn)) (ne
 	return server, request
 }
 
-func setBodyTimeout(t *testing.T, timeout time.Duration) {
+func setBodyTimeouts(t *testing.T, idle, total time.Duration) {
 	t.Helper()
-	saved := requestBodyTimeout
-	t.Cleanup(func() { requestBodyTimeout = saved })
-	requestBodyTimeout = timeout
+	savedIdle, savedTotal := requestBodyIdleTimeout, requestBodyTimeout
+	t.Cleanup(func() { requestBodyIdleTimeout, requestBodyTimeout = savedIdle, savedTotal })
+	requestBodyIdleTimeout, requestBodyTimeout = idle, total
 }
 
 func TestReadRequestBody(t *testing.T) {
@@ -118,7 +119,7 @@ func TestReadRequestBody(t *testing.T) {
 	}
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			setBodyTimeout(t, 2*time.Second)
+			setBodyTimeouts(t, 2*time.Second, 2*time.Second)
 			server, request := readBodyOverPipe(t, test.head, func(client net.Conn) {
 				_, _ = client.Write([]byte(test.body))
 			})
@@ -130,7 +131,7 @@ func TestReadRequestBody(t *testing.T) {
 }
 
 func TestReadRequestBodySendsContinue(t *testing.T) {
-	setBodyTimeout(t, 2*time.Second)
+	setBodyTimeouts(t, 2*time.Second, 2*time.Second)
 	interim := make(chan string, 1)
 	head := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nExpect: 100-continue\r\n\r\n"
 	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
@@ -146,7 +147,7 @@ func TestReadRequestBodySendsContinue(t *testing.T) {
 }
 
 func TestReadRequestBodyDecodesChunked(t *testing.T) {
-	setBodyTimeout(t, 2*time.Second)
+	setBodyTimeouts(t, 2*time.Second, 2*time.Second)
 	interim := make(chan string, 1)
 	head := "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n"
 	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
@@ -161,8 +162,8 @@ func TestReadRequestBodyDecodesChunked(t *testing.T) {
 	require.Equal(t, continueResponse, <-interim)
 }
 
-func TestReadRequestBodyTimesOut(t *testing.T) {
-	setBodyTimeout(t, 50*time.Millisecond)
+func TestReadRequestBodyIdleTimeout(t *testing.T) {
+	setBodyTimeouts(t, 50*time.Millisecond, 2*time.Second)
 	head := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\n"
 	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
 		_, _ = client.Write([]byte("he"))
@@ -172,7 +173,7 @@ func TestReadRequestBodyTimesOut(t *testing.T) {
 }
 
 func TestReadRequestBodyTruncated(t *testing.T) {
-	setBodyTimeout(t, 2*time.Second)
+	setBodyTimeouts(t, 2*time.Second, 2*time.Second)
 	head := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\n"
 	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
 		_, _ = client.Write([]byte("he"))
@@ -181,4 +182,55 @@ func TestReadRequestBodyTruncated(t *testing.T) {
 	content, err := readRequestBody(server, request)
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	require.Equal(t, "he", string(content))
+}
+
+// trickle writes each byte of data to client, pausing between bytes.
+func trickle(client net.Conn, data string, pause time.Duration) {
+	for index := range len(data) {
+		if _, err := client.Write([]byte{data[index]}); err != nil {
+			return
+		}
+		time.Sleep(pause)
+	}
+}
+
+func TestReadRequestBodyToleratesSlowSender(t *testing.T) {
+	setBodyTimeouts(t, 200*time.Millisecond, 2*time.Second)
+	head := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 6\r\n\r\n"
+	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
+		trickle(client, "hello!", 50*time.Millisecond)
+	})
+	content, err := readRequestBody(server, request)
+	require.NoError(t, err, "a steady sender may take longer than one idle timeout overall")
+	require.Equal(t, "hello!", string(content))
+}
+
+func TestReadRequestBodyOverallTimeout(t *testing.T) {
+	setBodyTimeouts(t, 200*time.Millisecond, 150*time.Millisecond)
+	head := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 100\r\n\r\n"
+	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
+		trickle(client, strings.Repeat("a", 100), 20*time.Millisecond)
+	})
+	_, err := readRequestBody(server, request)
+	require.ErrorIs(t, err, os.ErrDeadlineExceeded)
+}
+
+func TestHandleConnectionClosesAfterTruncatedBody(t *testing.T) {
+	setBodyTimeouts(t, time.Minute, time.Minute)
+	client, done := serve(t)
+	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhe"))
+	require.NoError(t, err)
+	require.NoError(t, client.Close())
+	// With minute-long timeouts, only the early end of the body can end the handler.
+	waitForHandler(t, done)
+}
+
+func TestHandleConnectionClosesAfterBodyTimeout(t *testing.T) {
+	setBodyTimeouts(t, 50*time.Millisecond, time.Minute)
+	client, done := serve(t)
+	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhe"))
+	require.NoError(t, err)
+	waitForHandler(t, done)
+	_, err = client.Read(make([]byte, 1))
+	require.ErrorIs(t, err, io.EOF, "the connection must be closed without a response")
 }
