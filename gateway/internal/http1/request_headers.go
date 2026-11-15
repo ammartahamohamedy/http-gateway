@@ -24,6 +24,9 @@ type RequestFields struct {
 	// chunked; nil when absent.
 	TransferCodings []string
 
+	// TrailerNames holds the names from fields.ParseTrailer; nil when absent.
+	TrailerNames []string
+
 	// ConnectionOptions holds the options from fields.ParseConnection; nil when
 	// absent.
 	ConnectionOptions []string
@@ -79,6 +82,7 @@ var requestFieldRules = []requestFieldRule{
 	{name: "Host", apply: applyHostRule},
 	{name: "Content-Length", apply: applyContentLengthRule},
 	{name: "Transfer-Encoding", apply: applyTransferEncodingRule},
+	{name: "Trailer", apply: applyTrailerRule},
 	{name: "Connection", apply: applyConnectionRule},
 	{name: "Expect", apply: applyExpectRule},
 	{name: "Content-Type", apply: applyContentTypeRule},
@@ -93,6 +97,7 @@ var requestFieldRules = []requestFieldRule{
 // requestCrossChecks lists the cross-field checks in evaluation order.
 var requestCrossChecks = []requestCrossCheck{
 	{name: "Transfer-Encoding", apply: checkFramingConflict},
+	{name: "Trailer", apply: checkTrailerNames},
 	{name: "Connection", apply: checkConnectionOptions},
 	{name: "Expect", apply: checkExpectContent},
 }

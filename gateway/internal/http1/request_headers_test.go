@@ -20,7 +20,7 @@ func TestRequestFieldRulesOrder(t *testing.T) {
 		names = append(names, rule.name)
 	}
 	require.Equal(t, []string{
-		"Host", "Content-Length", "Transfer-Encoding", "Connection", "Expect",
+		"Host", "Content-Length", "Transfer-Encoding", "Trailer", "Connection", "Expect",
 		"Content-Type", "Accept", "Content-Encoding", "Accept-Encoding",
 		"Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers",
 	}, names)
@@ -365,6 +365,35 @@ func TestCORSFieldErrors(t *testing.T) {
 			var fieldErr *FieldError
 			require.ErrorAs(t, err, &fieldErr)
 			require.Equal(t, test.field, fieldErr.Name)
+		})
+	}
+}
+
+func TestTrailerField(t *testing.T) {
+	parsed, err := processRequestFields(originLine, header.Headers{
+		"host":              {"example.com"},
+		"transfer-encoding": {"chunked"},
+		"trailer":           {"X-Checksum, Server-Timing"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"x-checksum", "server-timing"}, parsed.TrailerNames)
+
+	tests := []struct {
+		name  string
+		value string
+		want  error
+	}{
+		{"malformed list", "a b", fields.ErrInvalidTrailer},
+		{"forbidden field announced", "X-Checksum, Content-Length", fields.ErrForbiddenTrailerField},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			parsed, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "trailer": {test.value}})
+			require.ErrorIs(t, err, test.want)
+			require.Zero(t, parsed)
+			var fieldErr *FieldError
+			require.ErrorAs(t, err, &fieldErr)
+			require.Equal(t, "Trailer", fieldErr.Name)
 		})
 	}
 }

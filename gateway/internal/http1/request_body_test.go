@@ -10,6 +10,7 @@ import (
 	"testing/iotest"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/body"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 	"github.com/stretchr/testify/require"
 )
 
@@ -118,4 +119,44 @@ func TestReadRequestTruncatedBody(t *testing.T) {
 	content, err := io.ReadAll(request.Body)
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	require.Equal(t, "abc", string(content))
+}
+
+func TestReadRequestTrailers(t *testing.T) {
+	head := "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n"
+	tests := []struct {
+		name     string
+		trailers string
+		want     header.Headers
+	}{
+		{"no trailers", "", nil},
+		{"allowed trailers kept", "X-Checksum: abc\r\nServer-Timing: db\r\n", header.Headers{"x-checksum": {"abc"}, "server-timing": {"db"}}},
+		{"forbidden trailers dropped", "X-Checksum: abc\r\nContent-Length: 50\r\nHost: evil.example\r\n", header.Headers{"x-checksum": {"abc"}}},
+		{"only forbidden trailers", "Transfer-Encoding: chunked\r\n", nil},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			request, err := ReadRequest(bufio.NewReader(strings.NewReader(head + test.trailers + "\r\n")))
+			require.NoError(t, err)
+			require.Nil(t, request.Trailers, "trailers arrive after the body")
+			content, err := io.ReadAll(request.Body)
+			require.NoError(t, err)
+			require.Equal(t, "hello", string(content))
+			require.Equal(t, test.want, request.Trailers)
+		})
+	}
+}
+
+func TestReadRequestContentLengthBodyHasNoTrailers(t *testing.T) {
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello")))
+	require.NoError(t, err)
+	_, err = io.ReadAll(request.Body)
+	require.NoError(t, err)
+	require.Nil(t, request.Trailers)
+}
+
+func TestAllowedTrailersKeepsInput(t *testing.T) {
+	trailers := header.Headers{"x-checksum": {"abc"}, "host": {"evil.example"}}
+	require.Equal(t, header.Headers{"x-checksum": {"abc"}}, allowedTrailers(trailers))
+	require.Equal(t, header.Headers{"x-checksum": {"abc"}, "host": {"evil.example"}}, trailers)
+	require.Nil(t, allowedTrailers(nil))
 }

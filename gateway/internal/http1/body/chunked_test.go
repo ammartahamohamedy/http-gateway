@@ -9,6 +9,7 @@ import (
 	"testing"
 	"testing/iotest"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/lineio"
 	"github.com/stretchr/testify/require"
 )
@@ -18,7 +19,7 @@ const chunkedTestLimit = 1 << 20
 func decodeChunked(t *testing.T, source io.Reader, limit int64) (string, string, error) {
 	t.Helper()
 	reader := bufio.NewReaderSize(source, 16)
-	content, err := io.ReadAll(NewChunkedReader(reader, limit))
+	content, err := io.ReadAll(NewChunkedReader(reader, limit, nil))
 	remaining, remainingErr := io.ReadAll(reader)
 	require.NoError(t, remainingErr)
 	return string(content), string(remaining), err
@@ -42,7 +43,7 @@ func TestChunkedReaderDecodes(t *testing.T) {
 		{"extension BWS", "5 ;\tname = value\r\nhello\r\n0\r\n\r\n", "hello"},
 		{"quoted extension", "5;name=\"a;b=\\\"c\"\r\nhello\r\n0\r\n\r\n", "hello"},
 		{"several extensions", "5;a;b=c ; d\r\nhello\r\n0;last\r\n\r\n", "hello"},
-		{"trailers discarded", "5\r\nhello\r\n0\r\nX-Trailer: value\r\nY: z\r\n\r\n", "hello"},
+		{"trailers without callback", "5\r\nhello\r\n0\r\nX-Trailer: value\r\nY: z\r\n\r\n", "hello"},
 	}
 	for test := range slices.Values(tests) {
 		for fragmented := range slices.Values([]bool{false, true}) {
@@ -65,7 +66,7 @@ func TestChunkedReaderDecodes(t *testing.T) {
 }
 
 func TestChunkedReaderSmallBuffer(t *testing.T) {
-	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n")), chunkedTestLimit)
+	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n")), chunkedTestLimit, nil)
 	buffer := make([]byte, 2)
 	var content []byte
 	for {
@@ -181,7 +182,7 @@ func TestChunkedReaderLimit(t *testing.T) {
 }
 
 func TestChunkedReaderErrorsAreSticky(t *testing.T) {
-	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("g\r\n5\r\nhello\r\n0\r\n\r\n")), chunkedTestLimit)
+	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("g\r\n5\r\nhello\r\n0\r\n\r\n")), chunkedTestLimit, nil)
 	for range 2 {
 		count, err := reader.Read(make([]byte, 8))
 		require.Zero(t, count)
@@ -192,7 +193,7 @@ func TestChunkedReaderErrorsAreSticky(t *testing.T) {
 func TestChunkedReaderPropagatesSourceErrors(t *testing.T) {
 	errSource := errors.New("connection reset")
 	source := io.MultiReader(strings.NewReader("5\r\nhe"), iotest.ErrReader(errSource))
-	content, err := io.ReadAll(NewChunkedReader(bufio.NewReader(source), chunkedTestLimit))
+	content, err := io.ReadAll(NewChunkedReader(bufio.NewReader(source), chunkedTestLimit, nil))
 	require.ErrorIs(t, err, errSource)
 	require.Equal(t, "he", string(content))
 }
@@ -200,7 +201,7 @@ func TestChunkedReaderPropagatesSourceErrors(t *testing.T) {
 func TestChunkedReaderClose(t *testing.T) {
 	const wire = "5\r\nhello\r\n0\r\n\r\n"
 	source := bufio.NewReader(strings.NewReader(wire))
-	reader := NewChunkedReader(source, chunkedTestLimit)
+	reader := NewChunkedReader(source, chunkedTestLimit, nil)
 	require.NoError(t, reader.Close())
 	count, err := reader.Read(make([]byte, 5))
 	require.Zero(t, count)
@@ -208,4 +209,42 @@ func TestChunkedReaderClose(t *testing.T) {
 	remaining, err := io.ReadAll(source)
 	require.NoError(t, err)
 	require.Equal(t, wire, string(remaining), "Close must not drain the source")
+}
+
+func TestChunkedReaderPassesTrailers(t *testing.T) {
+	tests := []struct {
+		name string
+		wire string
+		want header.Headers
+	}{
+		{"no trailers", "5\r\nhello\r\n0\r\n\r\n", nil},
+		{"trailers", "5\r\nhello\r\n0\r\nX-Checksum: abc\r\nx-checksum: def\r\nServer-Timing: db\r\n\r\n",
+			header.Headers{"x-checksum": {"abc", "def"}, "server-timing": {"db"}}},
+	}
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			var got header.Headers
+			reader := NewChunkedReader(bufio.NewReader(strings.NewReader(test.wire)), chunkedTestLimit, func(trailers header.Headers) {
+				calls++
+				got = trailers
+			})
+			content, err := io.ReadAll(reader)
+			require.NoError(t, err)
+			require.Equal(t, "hello", string(content))
+			require.Equal(t, 1, calls)
+			require.Equal(t, test.want, got)
+			_, err = reader.Read(make([]byte, 1))
+			require.ErrorIs(t, err, io.EOF)
+			require.Equal(t, 1, calls, "trailers are passed once")
+		})
+	}
+}
+
+func TestChunkedReaderSkipsCallbackOnError(t *testing.T) {
+	called := false
+	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("0\r\nno colon\r\n\r\n")), chunkedTestLimit, func(header.Headers) { called = true })
+	_, err := io.ReadAll(reader)
+	require.Error(t, err)
+	require.False(t, called)
 }

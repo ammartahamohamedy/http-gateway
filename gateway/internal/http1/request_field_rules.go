@@ -36,6 +36,15 @@ func applyTransferEncodingRule(values []string, _ RequestLine, out *RequestField
 	return nil
 }
 
+func applyTrailerRule(values []string, _ RequestLine, out *RequestFields) error {
+	names, err := fields.ParseTrailer(values)
+	if err != nil {
+		return err
+	}
+	out.TrailerNames = names
+	return nil
+}
+
 func applyConnectionRule(values []string, _ RequestLine, out *RequestFields) error {
 	options, err := fields.ParseConnection(values)
 	if err != nil {
@@ -105,6 +114,11 @@ func checkFramingConflict(_ RequestLine, _ header.Headers, parsed RequestFields)
 		return fields.ErrFramingConflict
 	}
 	return nil
+}
+
+// checkTrailerNames applies fields.ValidateTrailerNames.
+func checkTrailerNames(_ RequestLine, _ header.Headers, parsed RequestFields) error {
+	return fields.ValidateTrailerNames(parsed.TrailerNames)
 }
 
 // checkConnectionOptions applies fields.ValidateConnectionOptions.

@@ -43,7 +43,7 @@ func ReadRequest(reader *bufio.Reader) (*Request, error) {
 	}
 
 	// Body stage: decide framing and attach a body reader over the same reader.
-	request.Body, err = requestBody(reader, request.RequestLine, request.Fields)
+	request.Body, err = requestBody(reader, &request)
 	if err != nil {
 		return nil, err
 	}

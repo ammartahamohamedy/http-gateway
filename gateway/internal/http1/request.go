@@ -56,14 +56,17 @@ type RequestLine struct {
 }
 
 // Request holds an HTTP/1.x request-line, header fields, parsed metadata from
-// the supported fields, and the body. Body is empty without framing fields,
-// exactly Content-Length bytes with one, and the decoded data for chunked
-// framing.
+// the supported fields, the body, and its trailers. Body is empty without
+// framing fields, exactly Content-Length bytes with one, and the decoded data
+// for chunked framing.
 type Request struct {
 	RequestLine RequestLine
 	Headers     header.Headers
 	Fields      RequestFields
 	Body        io.ReadCloser
+
+	// Trailers holds the allowed trailer fields, set once Body returns io.EOF.
+	Trailers header.Headers
 }
 
 // processRequestLine skips up to maxLeadingEmptyLines empty CRLF lines, reads a
