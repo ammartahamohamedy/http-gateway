@@ -8,7 +8,7 @@ import (
 	"slices"
 	"time"
 
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/request"
 )
 
 var (
@@ -28,16 +28,16 @@ const continueResponse = "HTTP/1.1 100 Continue\r\n\r\n"
 // readRequestBody buffers the whole request body, first writing
 // continueResponse if the client expects 100-continue. Reading fails after a
 // pause longer than requestBodyIdleTimeout or once requestBodyTimeout passes.
-func readRequestBody(connection net.Conn, request *http1.Request) ([]byte, error) {
+func readRequestBody(connection net.Conn, message *request.Message) ([]byte, error) {
 	defer func() {
-		if err := request.Body.Close(); err != nil {
+		if err := message.Body.Close(); err != nil {
 			log.Printf("closing request body: %v", err)
 		}
 	}()
 
 	cutoff := time.Now().Add(requestBodyTimeout)
 
-	if slices.Contains(request.Fields.Expectations, "100-continue") {
+	if slices.Contains(message.Fields.Expectations, "100-continue") {
 		if err := connection.SetWriteDeadline(time.Now().Add(requestBodyIdleTimeout)); err != nil {
 			return nil, fmt.Errorf("setting write deadline: %w", err)
 		}
@@ -46,5 +46,5 @@ func readRequestBody(connection net.Conn, request *http1.Request) ([]byte, error
 		}
 	}
 
-	return io.ReadAll(newIdleDeadlineReader(connection, request.Body, requestBodyIdleTimeout, cutoff))
+	return io.ReadAll(newIdleDeadlineReader(connection, message.Body, requestBodyIdleTimeout, cutoff))
 }

@@ -1,4 +1,4 @@
-package http1
+package request
 
 import (
 	"slices"
@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseRequestLine(t *testing.T) {
+func TestParseLine(t *testing.T) {
 	tests := []struct {
 		name          string
 		rawLine       string
@@ -34,9 +34,9 @@ func TestParseRequestLine(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			line, err := parseRequestLine(test.rawLine)
+			line, err := parseLine(test.rawLine)
 			require.NoError(t, err)
-			require.Equal(t, RequestLine{
+			require.Equal(t, Line{
 				Method:        test.method,
 				RequestTarget: test.requestTarget,
 				Version:       "1.1",
@@ -45,7 +45,7 @@ func TestParseRequestLine(t *testing.T) {
 	}
 }
 
-func TestParseRequestLineRejectsMalformedInput(t *testing.T) {
+func TestParseLineRejectsMalformedInput(t *testing.T) {
 	tests := []struct {
 		name    string
 		rawLine string
@@ -99,16 +99,16 @@ func TestParseRequestLineRejectsMalformedInput(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			line, err := parseRequestLine(test.rawLine)
+			line, err := parseLine(test.rawLine)
 			require.Error(t, err)
-			require.Equal(t, RequestLine{}, line)
+			require.Equal(t, Line{}, line)
 		})
 	}
 }
 
-func TestParseRequestLineDoesNotEnforceReadLimit(t *testing.T) {
-	requestTarget := "/" + strings.Repeat("a", maxRequestLineBytes)
-	line, err := parseRequestLine("GET " + requestTarget + " HTTP/1.1")
+func TestParseLineDoesNotEnforceReadLimit(t *testing.T) {
+	requestTarget := "/" + strings.Repeat("a", maxLineBytes)
+	line, err := parseLine("GET " + requestTarget + " HTTP/1.1")
 	require.NoError(t, err)
-	require.Equal(t, RequestLine{Method: "GET", RequestTarget: requestTarget, Version: "1.1"}, line)
+	require.Equal(t, Line{Method: "GET", RequestTarget: requestTarget, Version: "1.1"}, line)
 }

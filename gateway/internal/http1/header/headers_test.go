@@ -128,7 +128,7 @@ func TestParseHeaderFieldValueBytes(t *testing.T) {
 	}
 }
 
-// testLimits matches the request limits used by http1.ReadRequest.
+// testLimits matches the request limits used by request.Read.
 var testLimits = Limits{LineBytes: 8 * 1024, SectionBytes: 32 * 1024, Fields: 100}
 
 func TestReadHeadersSectionLimits(t *testing.T) {

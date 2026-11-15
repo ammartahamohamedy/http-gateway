@@ -1,4 +1,4 @@
-package http1
+package request
 
 import (
 	"bufio"
@@ -19,7 +19,7 @@ import (
 
 // requireEmptyBody checks that request has an empty body, then clears Body so
 // the rest of the request can be compared by value.
-func requireEmptyBody(t *testing.T, request *Request) *Request {
+func requireEmptyBody(t *testing.T, request *Message) *Message {
 	t.Helper()
 	require.NotNil(t, request.Body)
 	content, err := io.ReadAll(request.Body)
@@ -29,7 +29,7 @@ func requireEmptyBody(t *testing.T, request *Request) *Request {
 	return request
 }
 
-func TestReadRequestAttachesBody(t *testing.T) {
+func TestReadAttachesBody(t *testing.T) {
 	tests := []struct {
 		name          string
 		framing       string
@@ -50,7 +50,7 @@ func TestReadRequestAttachesBody(t *testing.T) {
 					source = iotest.OneByteReader(source)
 				}
 				reader := bufio.NewReader(source)
-				request, err := ReadRequest(reader)
+				request, err := Read(reader)
 				require.NoError(t, err)
 				content, err := io.ReadAll(request.Body)
 				require.NoError(t, err)
@@ -64,7 +64,7 @@ func TestReadRequestAttachesBody(t *testing.T) {
 	}
 }
 
-func TestReadRequestDecodesChunkedBody(t *testing.T) {
+func TestReadDecodesChunkedBody(t *testing.T) {
 	for fragmented := range slices.Values([]bool{false, true}) {
 		t.Run("fragmented="+strconv.FormatBool(fragmented), func(t *testing.T) {
 			var source io.Reader = strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n" +
@@ -73,7 +73,7 @@ func TestReadRequestDecodesChunkedBody(t *testing.T) {
 				source = iotest.OneByteReader(source)
 			}
 			reader := bufio.NewReader(source)
-			request, err := ReadRequest(reader)
+			request, err := Read(reader)
 			require.NoError(t, err)
 			content, err := io.ReadAll(request.Body)
 			require.NoError(t, err)
@@ -85,47 +85,47 @@ func TestReadRequestDecodesChunkedBody(t *testing.T) {
 	}
 }
 
-func TestReadRequestBodyLimit(t *testing.T) {
+func TestReadBodyLimit(t *testing.T) {
 	head := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: "
 
-	reader := bufio.NewReader(strings.NewReader(head + strconv.Itoa(maxRequestBodyBytes) + "\r\n\r\n" + strings.Repeat("a", maxRequestBodyBytes)))
-	request, err := ReadRequest(reader)
+	reader := bufio.NewReader(strings.NewReader(head + strconv.Itoa(maxBodyBytes) + "\r\n\r\n" + strings.Repeat("a", maxBodyBytes)))
+	request, err := Read(reader)
 	require.NoError(t, err)
 	content, err := io.ReadAll(request.Body)
 	require.NoError(t, err)
-	require.Len(t, content, maxRequestBodyBytes)
+	require.Len(t, content, maxBodyBytes)
 
-	request, err = ReadRequest(bufio.NewReader(strings.NewReader(head + strconv.Itoa(maxRequestBodyBytes+1) + "\r\n\r\n")))
+	request, err = Read(bufio.NewReader(strings.NewReader(head + strconv.Itoa(maxBodyBytes+1) + "\r\n\r\n")))
 	require.ErrorIs(t, err, body.ErrBodyTooLarge)
 	require.Nil(t, request)
 }
 
-func TestReadRequestChunkedBodyLimit(t *testing.T) {
+func TestReadChunkedBodyLimit(t *testing.T) {
 	head := "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n"
-	atLimit := strconv.FormatInt(maxRequestBodyBytes, 16) + "\r\n" + strings.Repeat("a", maxRequestBodyBytes) + "\r\n0\r\n\r\n"
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader(head + atLimit)))
+	atLimit := strconv.FormatInt(maxBodyBytes, 16) + "\r\n" + strings.Repeat("a", maxBodyBytes) + "\r\n0\r\n\r\n"
+	request, err := Read(bufio.NewReader(strings.NewReader(head + atLimit)))
 	require.NoError(t, err)
 	content, err := io.ReadAll(request.Body)
 	require.NoError(t, err)
-	require.Len(t, content, maxRequestBodyBytes)
+	require.Len(t, content, maxBodyBytes)
 
-	overLimit := "1\r\na\r\n" + strconv.FormatInt(maxRequestBodyBytes, 16) + "\r\n"
-	request, err = ReadRequest(bufio.NewReader(strings.NewReader(head + overLimit)))
+	overLimit := "1\r\na\r\n" + strconv.FormatInt(maxBodyBytes, 16) + "\r\n"
+	request, err = Read(bufio.NewReader(strings.NewReader(head + overLimit)))
 	require.NoError(t, err)
 	_, err = io.ReadAll(request.Body)
 	require.ErrorIs(t, err, body.ErrBodyTooLarge)
 }
 
-func TestReadRequestTruncatedBody(t *testing.T) {
+func TestReadTruncatedBody(t *testing.T) {
 	reader := bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 10\r\n\r\nabc"))
-	request, err := ReadRequest(reader)
+	request, err := Read(reader)
 	require.NoError(t, err)
 	content, err := io.ReadAll(request.Body)
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	require.Equal(t, "abc", string(content))
 }
 
-func TestReadRequestTrailers(t *testing.T) {
+func TestReadTrailers(t *testing.T) {
 	head := "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n"
 	tests := []struct {
 		name     string
@@ -140,7 +140,7 @@ func TestReadRequestTrailers(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			request, err := ReadRequest(bufio.NewReader(strings.NewReader(head + test.trailers + "\r\n")))
+			request, err := Read(bufio.NewReader(strings.NewReader(head + test.trailers + "\r\n")))
 			require.NoError(t, err)
 			require.Nil(t, request.Trailers, "trailers arrive after the body")
 			content, err := io.ReadAll(request.Body)
@@ -151,8 +151,8 @@ func TestReadRequestTrailers(t *testing.T) {
 	}
 }
 
-func TestReadRequestContentLengthBodyHasNoTrailers(t *testing.T) {
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello")))
+func TestReadContentLengthBodyHasNoTrailers(t *testing.T) {
+	request, err := Read(bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello")))
 	require.NoError(t, err)
 	_, err = io.ReadAll(request.Body)
 	require.NoError(t, err)
@@ -166,7 +166,7 @@ func TestAllowedTrailersKeepsInput(t *testing.T) {
 	require.Nil(t, allowedTrailers(nil))
 }
 
-func TestReadRequestDecodesGzipTransferCoding(t *testing.T) {
+func TestReadDecodesGzipTransferCoding(t *testing.T) {
 	var encoded bytes.Buffer
 	writer := gzip.NewWriter(&encoded)
 	_, err := writer.Write([]byte("hello world"))
@@ -178,7 +178,7 @@ func TestReadRequestDecodesGzipTransferCoding(t *testing.T) {
 		t.Run(coding, func(t *testing.T) {
 			reader := bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: " +
 				coding + ", chunked\r\n\r\n" + chunks + "NEXT"))
-			request, err := ReadRequest(reader)
+			request, err := Read(reader)
 			require.NoError(t, err)
 			content, err := io.ReadAll(request.Body)
 			require.NoError(t, err)
@@ -191,20 +191,20 @@ func TestReadRequestDecodesGzipTransferCoding(t *testing.T) {
 	}
 }
 
-func TestReadRequestLimitsDecodedBody(t *testing.T) {
+func TestReadLimitsDecodedBody(t *testing.T) {
 	var encoded bytes.Buffer
 	writer := gzip.NewWriter(&encoded)
-	_, err := writer.Write(make([]byte, 2*maxRequestBodyBytes))
+	_, err := writer.Write(make([]byte, 2*maxBodyBytes))
 	require.NoError(t, err)
 	require.NoError(t, writer.Close())
 	chunks := strconv.FormatInt(int64(encoded.Len()), 16) + "\r\n" + encoded.String() + "\r\n0\r\n\r\n"
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: gzip, chunked\r\n\r\n" + chunks)))
+	request, err := Read(bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: gzip, chunked\r\n\r\n" + chunks)))
 	require.NoError(t, err)
 	_, err = io.ReadAll(request.Body)
 	require.ErrorIs(t, err, body.ErrBodyTooLarge)
 }
 
-func TestReadRequestDecodesStackedTransferCodings(t *testing.T) {
+func TestReadDecodesStackedTransferCodings(t *testing.T) {
 	var gzipped bytes.Buffer
 	gzipWriter := gzip.NewWriter(&gzipped)
 	_, err := gzipWriter.Write([]byte("hello world"))
@@ -217,7 +217,7 @@ func TestReadRequestDecodesStackedTransferCodings(t *testing.T) {
 	require.NoError(t, zlibWriter.Close())
 
 	chunks := strconv.FormatInt(int64(encoded.Len()), 16) + "\r\n" + encoded.String() + "\r\n0\r\n\r\n"
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: gzip, deflate, chunked\r\n\r\n" + chunks)))
+	request, err := Read(bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: gzip, deflate, chunked\r\n\r\n" + chunks)))
 	require.NoError(t, err)
 	content, err := io.ReadAll(request.Body)
 	require.NoError(t, err)

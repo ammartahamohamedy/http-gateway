@@ -9,12 +9,12 @@ import (
 // Whether that version is supported is checked separately.
 var httpVersionPattern = regexp.MustCompile(`\AHTTP/[0-9]\.[0-9]\z`)
 
-// parseHTTPVersion validates an HTTP version token and returns the version to
+// ParseVersion validates an HTTP version token and returns the version to
 // process the message as: "1.0", or "1.1" for HTTP/1.1 and higher HTTP/1 minors
 // (RFC 9110, Section 6.2). Other majors are unsupported; callers decide whether
 // 1.0 is allowed. Malformed and unsupported versions return different messages,
 // without sentinels, and an empty version.
-func parseHTTPVersion(rawVersion string) (string, error) {
+func ParseVersion(rawVersion string) (string, error) {
 	if !httpVersionPattern.MatchString(rawVersion) {
 		return "", fmt.Errorf("http1: invalid HTTP version %q", rawVersion)
 	}

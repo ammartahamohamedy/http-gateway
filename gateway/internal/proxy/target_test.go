@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/request"
 	"github.com/stretchr/testify/require"
 )
 
@@ -55,10 +55,10 @@ func TestCheckRequestTarget(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			message := test.startLine + "\r\nHost: " + test.host + "\r\n\r\n"
-			request, err := http1.ReadRequest(bufio.NewReader(strings.NewReader(message)))
+			raw := test.startLine + "\r\nHost: " + test.host + "\r\n\r\n"
+			message, err := request.Read(bufio.NewReader(strings.NewReader(raw)))
 			require.NoError(t, err)
-			err = checkRequestTarget(request)
+			err = checkRequestTarget(message)
 			if test.wantErr != nil {
 				require.ErrorIs(t, err, test.wantErr)
 				return

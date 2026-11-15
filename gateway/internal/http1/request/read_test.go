@@ -1,4 +1,4 @@
-package http1
+package request
 
 import (
 	"bufio"
@@ -12,56 +12,57 @@ import (
 	"testing/iotest"
 	"time"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/body"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 	"github.com/stretchr/testify/require"
 )
 
-func TestReadRequestSizeLimit(t *testing.T) {
+func TestReadSizeLimit(t *testing.T) {
 	prefix, suffix := "GET /", " HTTP/1.1"
-	rawLine := prefix + strings.Repeat("a", maxRequestLineBytes-len(prefix)-len(suffix)) + suffix
-	oversizedRawLine := prefix + strings.Repeat("a", maxRequestLineBytes+1-len(prefix)-len(suffix)) + suffix
+	rawLine := prefix + strings.Repeat("a", maxLineBytes-len(prefix)-len(suffix)) + suffix
+	oversizedRawLine := prefix + strings.Repeat("a", maxLineBytes+1-len(prefix)-len(suffix)) + suffix
 
-	line, err := parseRequestLine(rawLine)
+	line, err := parseLine(rawLine)
 	require.NoError(t, err)
-	parsed, err := ReadRequest(bufio.NewReader(strings.NewReader(rawLine + "\r\nHost: example.com\r\n\r\n")))
+	parsed, err := Read(bufio.NewReader(strings.NewReader(rawLine + "\r\nHost: example.com\r\n\r\n")))
 	require.NoError(t, err)
-	require.Equal(t, &Request{RequestLine: line, Headers: header.Headers{"host": {"example.com"}}, Fields: RequestFields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
-	parsed, err = ReadRequest(bufio.NewReaderSize(strings.NewReader(rawLine+"\r\nHost: example.com\r\n\r\n"), maxRequestLineBytes+1))
+	require.Equal(t, &Message{Line: line, Headers: header.Headers{"host": {"example.com"}}, Fields: Fields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
+	parsed, err = Read(bufio.NewReaderSize(strings.NewReader(rawLine+"\r\nHost: example.com\r\n\r\n"), maxLineBytes+1))
 	require.NoError(t, err)
-	require.Equal(t, &Request{RequestLine: line, Headers: header.Headers{"host": {"example.com"}}, Fields: RequestFields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
-	_, err = ReadRequest(bufio.NewReader(strings.NewReader(rawLine + "\r")))
+	require.Equal(t, &Message{Line: line, Headers: header.Headers{"host": {"example.com"}}, Fields: Fields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
+	_, err = Read(bufio.NewReader(strings.NewReader(rawLine + "\r")))
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 
-	_, err = ReadRequest(bufio.NewReader(strings.NewReader(oversizedRawLine + "\r\n")))
-	require.ErrorIs(t, err, ErrRequestLineTooLong)
-	_, err = ReadRequest(bufio.NewReader(strings.NewReader(oversizedRawLine)))
-	require.ErrorIs(t, err, ErrRequestLineTooLong)
-	_, err = ReadRequest(bufio.NewReader(strings.NewReader(oversizedRawLine + "\r")))
-	require.ErrorIs(t, err, ErrRequestLineTooLong)
+	_, err = Read(bufio.NewReader(strings.NewReader(oversizedRawLine + "\r\n")))
+	require.ErrorIs(t, err, ErrLineTooLong)
+	_, err = Read(bufio.NewReader(strings.NewReader(oversizedRawLine)))
+	require.ErrorIs(t, err, ErrLineTooLong)
+	_, err = Read(bufio.NewReader(strings.NewReader(oversizedRawLine + "\r")))
+	require.ErrorIs(t, err, ErrLineTooLong)
 }
 
-func TestReadRequestLeadingEmptyLines(t *testing.T) {
+func TestReadLeadingEmptyLines(t *testing.T) {
 	const message = "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
 
 	atLimit := strings.Repeat("\r\n", maxLeadingEmptyLines) + message
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader(atLimit)))
+	request, err := Read(bufio.NewReader(strings.NewReader(atLimit)))
 	require.NoError(t, err)
-	require.Equal(t, "GET", request.RequestLine.Method)
+	require.Equal(t, "GET", request.Line.Method)
 
 	overLimit := strings.Repeat("\r\n", maxLeadingEmptyLines+1) + message
-	request, err = ReadRequest(bufio.NewReader(strings.NewReader(overLimit)))
+	request, err = Read(bufio.NewReader(strings.NewReader(overLimit)))
 	require.ErrorIs(t, err, ErrTooManyLeadingEmptyLines)
 	require.Nil(t, request)
 
 	// A client sending only CRLFs is refused, not read forever.
 	endless := strings.NewReader(strings.Repeat("\r\n", 1000))
-	_, err = ReadRequest(bufio.NewReader(endless))
+	_, err = Read(bufio.NewReader(endless))
 	require.ErrorIs(t, err, ErrTooManyLeadingEmptyLines)
 }
 
-func TestReadRequest(t *testing.T) {
+func TestRead(t *testing.T) {
 	for test := range slices.Values([]struct {
 		name   string
 		reader io.Reader
@@ -72,21 +73,21 @@ func TestReadRequest(t *testing.T) {
 		{"data with EOF", iotest.DataErrReader(strings.NewReader("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"))},
 	}) {
 		t.Run(test.name, func(t *testing.T) {
-			request, err := ReadRequest(bufio.NewReaderSize(test.reader, 16))
+			request, err := Read(bufio.NewReaderSize(test.reader, 16))
 			require.NoError(t, err)
-			require.Equal(t, &Request{
-				RequestLine: RequestLine{Method: "GET", RequestTarget: "/", Version: "1.1"},
-				Headers:     header.Headers{"host": {"example.com"}},
-				Fields:      RequestFields{Authority: "example.com"},
+			require.Equal(t, &Message{
+				Line:    Line{Method: "GET", RequestTarget: "/", Version: "1.1"},
+				Headers: header.Headers{"host": {"example.com"}},
+				Fields:  Fields{Authority: "example.com"},
 			}, requireEmptyBody(t, request))
 		})
 	}
 }
 
-func TestReadRequestPreservesRemainingBytes(t *testing.T) {
+func TestReadPreservesRemainingBytes(t *testing.T) {
 	remainder := "body\x00bytes\r\nGET /next HTTP/1.1\r\n\r\n"
 	reader := bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n" + remainder))
-	request, err := ReadRequest(reader)
+	request, err := Read(reader)
 	require.NoError(t, err)
 	require.Equal(t, header.Headers{"host": {"example.com"}}, request.Headers)
 	require.Equal(t, []string{"example.com"}, request.Headers.Values("HOST"))
@@ -96,7 +97,7 @@ func TestReadRequestPreservesRemainingBytes(t *testing.T) {
 	require.Equal(t, remainder, string(remaining))
 }
 
-func TestReadRequestValidatesHost(t *testing.T) {
+func TestReadValidatesHost(t *testing.T) {
 	tests := []struct {
 		name      string
 		startLine string
@@ -137,7 +138,7 @@ func TestReadRequestValidatesHost(t *testing.T) {
 				section = test.headers + "\r\n\r\n"
 			}
 			reader := bufio.NewReader(iotest.OneByteReader(strings.NewReader(test.startLine + "\r\n" + section + "body")))
-			request, err := ReadRequest(reader)
+			request, err := Read(reader)
 			if test.wantErr != nil {
 				require.ErrorIs(t, err, test.wantErr)
 				require.Nil(t, request)
@@ -152,7 +153,7 @@ func TestReadRequestValidatesHost(t *testing.T) {
 	}
 }
 
-func TestReadRequestValidatesContentLength(t *testing.T) {
+func TestReadValidatesContentLength(t *testing.T) {
 	tests := []struct {
 		name        string
 		headerLines string
@@ -181,7 +182,7 @@ func TestReadRequestValidatesContentLength(t *testing.T) {
 			const remainder = "body\x00bytes\r\n"
 			raw := "POST / HTTP/1.1\r\nHost: example.com\r\n" + test.headerLines + "\r\n" + remainder
 			reader := bufio.NewReader(iotest.OneByteReader(strings.NewReader(raw)))
-			request, err := ReadRequest(reader)
+			request, err := Read(reader)
 			if test.wantErr != nil {
 				require.ErrorIs(t, err, test.wantErr)
 				require.Nil(t, request)
@@ -197,23 +198,23 @@ func TestReadRequestValidatesContentLength(t *testing.T) {
 	}
 }
 
-func TestReadRequestRejectsInvalidRequestLine(t *testing.T) {
+func TestReadRejectsInvalidRequestLine(t *testing.T) {
 	for rawLine := range slices.Values([]string{
 		"GET  HTTP/1.1",
 		"GE/T / HTTP/1.1",
 		"GET / HTTP/1.0",
 	}) {
 		t.Run(rawLine, func(t *testing.T) {
-			_, parseErr := parseRequestLine(rawLine)
+			_, parseErr := parseLine(rawLine)
 			require.Error(t, parseErr)
-			request, err := ReadRequest(bufio.NewReader(strings.NewReader(rawLine + "\r\n")))
+			request, err := Read(bufio.NewReader(strings.NewReader(rawLine + "\r\n")))
 			require.EqualError(t, err, parseErr.Error())
 			require.Nil(t, request)
 		})
 	}
 }
 
-func TestReadRequestErrors(t *testing.T) {
+func TestReadErrors(t *testing.T) {
 	readErr := errors.New("connection failed")
 	tests := []struct {
 		name   string
@@ -233,23 +234,23 @@ func TestReadRequestErrors(t *testing.T) {
 		{"read failure", iotest.ErrReader(readErr), readErr},
 		{"read failure after bytes", io.MultiReader(strings.NewReader("GET /"), iotest.ErrReader(readErr)), readErr},
 		{"read failure in headers", io.MultiReader(strings.NewReader("GET / HTTP/1.1\r\nX: value\r\n"), iotest.ErrReader(readErr)), readErr},
-		{"header line limit", strings.NewReader("GET / HTTP/1.1\r\nX:" + strings.Repeat("a", requestHeaderLimits.LineBytes) + "\r\n"), header.ErrLineTooLong},
-		{"header count limit", strings.NewReader("GET / HTTP/1.1\r\n" + strings.Repeat("X: a\r\n", requestHeaderLimits.Fields+1) + "\r\n"), header.ErrTooManyFields},
+		{"header line limit", strings.NewReader("GET / HTTP/1.1\r\nX:" + strings.Repeat("a", headerLimits.LineBytes) + "\r\n"), header.ErrLineTooLong},
+		{"header count limit", strings.NewReader("GET / HTTP/1.1\r\n" + strings.Repeat("X: a\r\n", headerLimits.Fields+1) + "\r\n"), header.ErrTooManyFields},
 	}
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			request, err := ReadRequest(bufio.NewReader(test.reader))
+			request, err := Read(bufio.NewReader(test.reader))
 			require.ErrorIs(t, err, test.want)
 			require.Nil(t, request)
 		})
 	}
 
-	_, err := ReadRequest(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\n")))
+	_, err := Read(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\n")))
 	require.ErrorContains(t, err, "CRLF")
 }
 
-func TestReadRequestBeforeConnectionCloses(t *testing.T) {
+func TestReadBeforeConnectionCloses(t *testing.T) {
 	source, client := net.Pipe()
 	t.Cleanup(func() {
 		_ = source.Close()
@@ -257,13 +258,13 @@ func TestReadRequestBeforeConnectionCloses(t *testing.T) {
 	})
 
 	type result struct {
-		request *Request
+		request *Message
 		err     error
 	}
 
 	parsed := make(chan result, 1)
 	go func() {
-		request, err := ReadRequest(bufio.NewReader(source))
+		request, err := Read(bufio.NewReader(source))
 		parsed <- result{request, err}
 	}()
 
@@ -276,7 +277,7 @@ func TestReadRequestBeforeConnectionCloses(t *testing.T) {
 	select {
 	case got := <-parsed:
 		require.NoError(t, got.err)
-		require.Equal(t, "/live", got.request.RequestLine.RequestTarget)
+		require.Equal(t, "/live", got.request.Line.RequestTarget)
 		require.Equal(t, header.Headers{"host": {"example.com"}}, got.request.Headers)
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "parser waited for connection EOF after complete headers")
@@ -290,7 +291,7 @@ func TestReadRequestBeforeConnectionCloses(t *testing.T) {
 	}
 }
 
-func TestReadRequestHeadersAndUnfolding(t *testing.T) {
+func TestReadHeadersAndUnfolding(t *testing.T) {
 	message := "GET / HTTP/1.1\r\n" +
 		"X-Test: first \t\r\n\t second  \tpart \t\r\n  third:fourth\r\n" +
 		"Host: example.com\r\nx-test: \"a,b\"\r\nX-Empty:\r\n\t\r\n" +
@@ -315,7 +316,7 @@ func TestReadRequestHeadersAndUnfolding(t *testing.T) {
 	}) {
 		t.Run(test.name, func(t *testing.T) {
 			reader := bufio.NewReaderSize(test.reader, 16)
-			request, err := ReadRequest(reader)
+			request, err := Read(reader)
 			require.NoError(t, err)
 			require.Equal(t, want, request.Headers)
 			body, err := io.ReadAll(reader)
@@ -325,13 +326,13 @@ func TestReadRequestHeadersAndUnfolding(t *testing.T) {
 	}
 }
 
-func TestReadRequestHeaderFragmentation(t *testing.T) {
+func TestReadHeaderFragmentation(t *testing.T) {
 	message := "GET / HTTP/1.1\r\nX: first\r\n\tsecond\r\nY: last\r\nHost: example.com\r\n\r\nbody"
 	for split := 1; split < len(message); split++ {
 		t.Run(fmt.Sprintf("split_%d", split), func(t *testing.T) {
 			source := io.MultiReader(strings.NewReader(message[:split]), strings.NewReader(message[split:]))
 			reader := bufio.NewReaderSize(source, 16)
-			request, err := ReadRequest(reader)
+			request, err := Read(reader)
 			require.NoError(t, err)
 			require.Equal(t, header.Headers{"x": {"first second"}, "y": {"last"}, "host": {"example.com"}}, request.Headers)
 			body, err := io.ReadAll(reader)
@@ -341,7 +342,7 @@ func TestReadRequestHeaderFragmentation(t *testing.T) {
 	}
 }
 
-func TestReadRequestRejectsMalformedHeaders(t *testing.T) {
+func TestReadRejectsMalformedHeaders(t *testing.T) {
 	for section := range slices.Values([]string{
 		"Host : example.com\r\n\r\n",
 		"Missing-Colon\r\n\r\n",
@@ -356,9 +357,43 @@ func TestReadRequestRejectsMalformedHeaders(t *testing.T) {
 		"X: ok\r\n\n",
 	}) {
 		t.Run(fmt.Sprintf("%q", section), func(t *testing.T) {
-			request, err := ReadRequest(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\n" + section)))
+			request, err := Read(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\n" + section)))
 			require.Error(t, err)
 			require.Nil(t, request)
 		})
 	}
+}
+
+func TestReadTagsFailedStage(t *testing.T) {
+	tests := []struct {
+		name    string
+		message string
+		stage   http1.Stage
+		want    error
+	}{
+		{"EOF before request-line", "", http1.StageRequestLine, io.EOF},
+		{"request-line too long", "GET /" + strings.Repeat("a", maxLineBytes) + " HTTP/1.1\r\n", http1.StageRequestLine, ErrLineTooLong},
+		{"too many fields", "GET / HTTP/1.1\r\n" + strings.Repeat("X: v\r\n", headerLimits.Fields+1) + "\r\n", http1.StageHeaders, header.ErrTooManyFields},
+		{"headers cut short", "GET / HTTP/1.1\r\nHost: example.com\r\n", http1.StageHeaders, io.ErrUnexpectedEOF},
+		{"invalid Host", "GET / HTTP/1.1\r\nHost: a b\r\n\r\n", http1.StageFields, fields.ErrInvalidHost},
+		{"declared body too large", "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 9999999\r\n\r\n", http1.StageBody, body.ErrBodyTooLarge},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			request, err := Read(bufio.NewReader(strings.NewReader(test.message)))
+			require.Nil(t, request)
+			var stageErr *http1.StageError
+			require.ErrorAs(t, err, &stageErr)
+			require.Equal(t, test.stage, stageErr.Stage)
+			require.ErrorIs(t, err, test.want)
+		})
+	}
+}
+
+func TestReadStageErrorKeepsFieldError(t *testing.T) {
+	_, err := Read(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\nHost: a b\r\n\r\n")))
+	var fieldErr *FieldError
+	require.ErrorAs(t, err, &fieldErr)
+	require.Equal(t, "Host", fieldErr.Name)
 }

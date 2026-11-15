@@ -1,4 +1,4 @@
-package http1
+package request
 
 import (
 	"errors"
@@ -11,10 +11,10 @@ import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
 )
 
-// requestTargetPattern accepts ASCII URI characters and complete %HH escapes,
+// targetPattern accepts ASCII URI characters and complete %HH escapes,
 // rejecting whitespace, controls, fragments, and malformed escapes anywhere
 // in the target. URI structure is checked separately; escapes are not decoded.
-var requestTargetPattern = regexp.MustCompile(`\A(?:[A-Za-z0-9._~:/?\[\]@!$&'()*+,;=-]|%[0-9A-Fa-f]{2})+\z`)
+var targetPattern = regexp.MustCompile(`\A(?:[A-Za-z0-9._~:/?\[\]@!$&'()*+,;=-]|%[0-9A-Fa-f]{2})+\z`)
 
 // TargetForm identifies one of the four request-target forms (RFC 9112,
 // Section 3.2).
@@ -27,9 +27,9 @@ const (
 	AsteriskForm
 )
 
-// TargetForm reports the form of a request-target accepted by parseRequestLine.
-// The result is meaningful only for a validated RequestLine.
-func (line RequestLine) TargetForm() TargetForm {
+// TargetForm reports the form of a request-target accepted by parseLine.
+// The result is meaningful only for a validated Line.
+func (line Line) TargetForm() TargetForm {
 	switch {
 	case line.Method == "CONNECT":
 		return AuthorityForm
@@ -42,7 +42,7 @@ func (line RequestLine) TargetForm() TargetForm {
 	}
 }
 
-// validateRequestTarget checks the character repertoire, percent escapes, and
+// validateTarget checks the character repertoire, percent escapes, and
 // basic URI structure, including method-specific target forms. CONNECT requires
 // a nonempty host and decimal port; asterisk-form is permitted only for OPTIONS.
 // Absolute-form accepts any absolute-URI, including opaque ones such as URNs,
@@ -51,8 +51,8 @@ func (line RequestLine) TargetForm() TargetForm {
 // including percent-escape encoding. This function does not resolve hosts,
 // check port ranges, or restrict schemes; gateway policy decides which forms
 // and schemes are forwarded.
-func validateRequestTarget(method, requestTarget string) error {
-	if !requestTargetPattern.MatchString(requestTarget) {
+func validateTarget(method, requestTarget string) error {
+	if !targetPattern.MatchString(requestTarget) {
 		return fmt.Errorf("http1: invalid request-target %q", requestTarget)
 	}
 

@@ -1,4 +1,5 @@
-package http1
+// Package response holds HTTP/1.1 response messages.
+package response
 
 import (
 	"io"
@@ -15,9 +16,9 @@ type StatusLine struct {
 	ReasonPhrase string
 }
 
-// Response holds an HTTP/1.x status-line, header fields, and an optional body
+// Message holds an HTTP/1.x status-line, header fields, and an optional body
 // stream. The type itself does not parse or validate these fields.
-type Response struct {
+type Message struct {
 	StatusLine StatusLine
 	Headers    header.Headers
 	Body       io.ReadCloser

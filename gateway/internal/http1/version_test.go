@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseHTTPVersion(t *testing.T) {
+func TestParseVersion(t *testing.T) {
 	tests := []struct {
 		rawVersion string
 		want       string
@@ -20,14 +20,14 @@ func TestParseHTTPVersion(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.rawVersion, func(t *testing.T) {
-			version, err := parseHTTPVersion(test.rawVersion)
+			version, err := ParseVersion(test.rawVersion)
 			require.NoError(t, err)
 			require.Equal(t, test.want, version)
 		})
 	}
 }
 
-func TestParseHTTPVersionRejectsMalformedTokens(t *testing.T) {
+func TestParseVersionRejectsMalformedTokens(t *testing.T) {
 	for rawVersion := range slices.Values([]string{
 		"",
 		"1.1",
@@ -44,17 +44,17 @@ func TestParseHTTPVersionRejectsMalformedTokens(t *testing.T) {
 		"HTTP/1.\xff",
 	}) {
 		t.Run(rawVersion, func(t *testing.T) {
-			version, err := parseHTTPVersion(rawVersion)
+			version, err := ParseVersion(rawVersion)
 			require.ErrorContains(t, err, "invalid HTTP version")
 			require.Empty(t, version)
 		})
 	}
 }
 
-func TestParseHTTPVersionRejectsUnsupportedVersions(t *testing.T) {
+func TestParseVersionRejectsUnsupportedVersions(t *testing.T) {
 	for rawVersion := range slices.Values([]string{"HTTP/0.9", "HTTP/2.0", "HTTP/9.9"}) {
 		t.Run(rawVersion, func(t *testing.T) {
-			version, err := parseHTTPVersion(rawVersion)
+			version, err := ParseVersion(rawVersion)
 			require.ErrorContains(t, err, "unsupported HTTP version")
 			require.Empty(t, version)
 		})

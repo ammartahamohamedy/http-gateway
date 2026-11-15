@@ -7,8 +7,8 @@ import (
 	"net"
 	"time"
 
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/request"
 )
 
 // requestHeadTimeout bounds reading the whole request head, so a client sending
@@ -35,9 +35,9 @@ func HandleConnection(connection net.Conn) {
 
 	reader := bufio.NewReader(connection)
 
-	request, err := http1.ReadRequest(reader)
+	message, err := request.Read(reader)
 	if err == nil {
-		err = fields.CheckTransferCodingSupport(request.Fields.TransferCodings)
+		err = fields.CheckTransferCodingSupport(message.Fields.TransferCodings)
 	}
 	if err != nil {
 		// TODO: Match wrapped errors with errors.Is and respond before closing:
@@ -48,18 +48,18 @@ func HandleConnection(connection net.Conn) {
 		return
 	}
 
-	if err := checkRequestTarget(request); err != nil {
+	if err := checkRequestTarget(message); err != nil {
 		log.Printf("rejecting request: %v", err)
 		return
 	}
 
-	if err := fields.CheckExpectationSupport(request.Fields.Expectations); err != nil {
+	if err := fields.CheckExpectationSupport(message.Fields.Expectations); err != nil {
 		// TODO: Respond 417 before closing.
 		log.Printf("rejecting request: %v", err)
 		return
 	}
 
-	content, err := readRequestBody(connection, request)
+	content, err := readRequestBody(connection, message)
 	if err != nil {
 		// TODO: Respond before closing: 400 for body.ErrInvalidFraming and 413
 		// for body.ErrBodyTooLarge.
@@ -68,7 +68,7 @@ func HandleConnection(connection net.Conn) {
 	}
 
 	fmt.Printf("Method: %s\nRequest target: %s\nVersion: %s\nAuthority: %s\n",
-		request.RequestLine.Method, request.RequestLine.RequestTarget,
-		request.RequestLine.Version, request.Fields.Authority)
+		message.Line.Method, message.Line.RequestTarget,
+		message.Line.Version, message.Fields.Authority)
 	fmt.Printf("Body: %d bytes\n", len(content))
 }

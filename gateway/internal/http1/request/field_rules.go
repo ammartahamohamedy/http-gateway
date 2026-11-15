@@ -1,11 +1,11 @@
-package http1
+package request
 
 import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 )
 
-func applyHostRule(values []string, line RequestLine, out *RequestFields) error {
+func applyHostRule(values []string, line Line, out *Fields) error {
 	err := fields.ValidateRequestHost(values, line.Method, line.RequestTarget)
 	if err != nil {
 		return err
@@ -15,7 +15,7 @@ func applyHostRule(values []string, line RequestLine, out *RequestFields) error 
 	return nil
 }
 
-func applyContentLengthRule(values []string, _ RequestLine, out *RequestFields) error {
+func applyContentLengthRule(values []string, _ Line, out *Fields) error {
 	length, present, err := fields.ParseContentLength(values)
 	if err != nil {
 		return err
@@ -26,7 +26,7 @@ func applyContentLengthRule(values []string, _ RequestLine, out *RequestFields) 
 	return nil
 }
 
-func applyTransferEncodingRule(values []string, _ RequestLine, out *RequestFields) error {
+func applyTransferEncodingRule(values []string, _ Line, out *Fields) error {
 	codings, err := fields.ParseTransferEncoding(values)
 	if err != nil {
 		return err
@@ -40,7 +40,7 @@ func applyTransferEncodingRule(values []string, _ RequestLine, out *RequestField
 	return nil
 }
 
-func applyTrailerRule(values []string, _ RequestLine, out *RequestFields) error {
+func applyTrailerRule(values []string, _ Line, out *Fields) error {
 	names, err := fields.ParseTrailer(values)
 	if err != nil {
 		return err
@@ -50,7 +50,7 @@ func applyTrailerRule(values []string, _ RequestLine, out *RequestFields) error 
 	return nil
 }
 
-func applyConnectionRule(values []string, _ RequestLine, out *RequestFields) error {
+func applyConnectionRule(values []string, _ Line, out *Fields) error {
 	options, err := fields.ParseConnection(values)
 	if err != nil {
 		return err
@@ -60,7 +60,7 @@ func applyConnectionRule(values []string, _ RequestLine, out *RequestFields) err
 	return nil
 }
 
-func applyExpectRule(values []string, _ RequestLine, out *RequestFields) error {
+func applyExpectRule(values []string, _ Line, out *Fields) error {
 	expectations, err := fields.ParseExpect(values)
 	if err != nil {
 		return err
@@ -70,23 +70,23 @@ func applyExpectRule(values []string, _ RequestLine, out *RequestFields) error {
 	return nil
 }
 
-func applyContentTypeRule(values []string, _ RequestLine, _ *RequestFields) error {
+func applyContentTypeRule(values []string, _ Line, _ *Fields) error {
 	return fields.ValidateContentType(values)
 }
 
-func applyAcceptRule(values []string, _ RequestLine, _ *RequestFields) error {
+func applyAcceptRule(values []string, _ Line, _ *Fields) error {
 	return fields.ValidateAccept(values)
 }
 
-func applyContentEncodingRule(values []string, _ RequestLine, _ *RequestFields) error {
+func applyContentEncodingRule(values []string, _ Line, _ *Fields) error {
 	return fields.ValidateContentEncoding(values)
 }
 
-func applyAcceptEncodingRule(values []string, _ RequestLine, _ *RequestFields) error {
+func applyAcceptEncodingRule(values []string, _ Line, _ *Fields) error {
 	return fields.ValidateAcceptEncoding(values)
 }
 
-func applyOriginRule(values []string, _ RequestLine, out *RequestFields) error {
+func applyOriginRule(values []string, _ Line, out *Fields) error {
 	origin, err := fields.ParseOrigin(values)
 	if err != nil {
 		return err
@@ -96,7 +96,7 @@ func applyOriginRule(values []string, _ RequestLine, out *RequestFields) error {
 	return nil
 }
 
-func applyAccessControlRequestMethodRule(values []string, _ RequestLine, out *RequestFields) error {
+func applyAccessControlRequestMethodRule(values []string, _ Line, out *Fields) error {
 	method, err := fields.ParseAccessControlRequestMethod(values)
 	if err != nil {
 		return err
@@ -106,7 +106,7 @@ func applyAccessControlRequestMethodRule(values []string, _ RequestLine, out *Re
 	return nil
 }
 
-func applyAccessControlRequestHeadersRule(values []string, _ RequestLine, out *RequestFields) error {
+func applyAccessControlRequestHeadersRule(values []string, _ Line, out *Fields) error {
 	names, err := fields.ParseAccessControlRequestHeaders(values)
 	if err != nil {
 		return err
@@ -119,7 +119,7 @@ func applyAccessControlRequestHeadersRule(values []string, _ RequestLine, out *R
 // checkFramingConflict rejects a request framed by both Transfer-Encoding and
 // Content-Length rather than letting one override the other (RFC 9112, Section
 // 6.3). This is strict by choice: Content-Length: 0 conflicts too.
-func checkFramingConflict(_ RequestLine, _ header.Headers, parsed RequestFields) error {
+func checkFramingConflict(_ Line, _ header.Headers, parsed Fields) error {
 	if parsed.ContentLengthPresent && len(parsed.TransferCodings) > 0 {
 		return fields.ErrFramingConflict
 	}
@@ -128,18 +128,18 @@ func checkFramingConflict(_ RequestLine, _ header.Headers, parsed RequestFields)
 }
 
 // checkTrailerNames applies fields.ValidateTrailerNames.
-func checkTrailerNames(_ RequestLine, _ header.Headers, parsed RequestFields) error {
+func checkTrailerNames(_ Line, _ header.Headers, parsed Fields) error {
 	return fields.ValidateTrailerNames(parsed.TrailerNames)
 }
 
 // checkConnectionOptions applies fields.ValidateConnectionOptions.
-func checkConnectionOptions(_ RequestLine, _ header.Headers, parsed RequestFields) error {
+func checkConnectionOptions(_ Line, _ header.Headers, parsed Fields) error {
 	return fields.ValidateConnectionOptions(parsed.ConnectionOptions)
 }
 
 // checkExpectContent applies fields.ValidateExpectContent. Chunked framing counts
 // as content.
-func checkExpectContent(_ RequestLine, _ header.Headers, parsed RequestFields) error {
+func checkExpectContent(_ Line, _ header.Headers, parsed Fields) error {
 	hasContent := parsed.ContentLength > 0 || len(parsed.TransferCodings) > 0
 	return fields.ValidateExpectContent(parsed.Expectations, hasContent)
 }

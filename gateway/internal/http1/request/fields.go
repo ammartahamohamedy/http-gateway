@@ -1,4 +1,4 @@
-package http1
+package request
 
 import (
 	"slices"
@@ -6,12 +6,12 @@ import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 )
 
-// RequestFields holds metadata parsed from the supported request fields for
+// Fields holds metadata parsed from the supported request fields for
 // body framing and proxy policy. It only carries values that have a consumer;
-// raw field values remain in Request.Headers. Cross-checks receive it by value
+// raw field values remain in Message.Headers. Cross-checks receive it by value
 // as a read-only view; slice members share their backing arrays, so checks must
 // not modify them.
-type RequestFields struct {
+type Fields struct {
 	// Authority is the effective request authority from fields.RequestAuthority.
 	Authority string
 
@@ -59,26 +59,26 @@ func (e *FieldError) Error() string { return e.Err.Error() }
 
 func (e *FieldError) Unwrap() error { return e.Err }
 
-// requestFieldRule parses and validates one named field. apply receives only
+// fieldRule parses and validates one named field. apply receives only
 // that field's separate field-line values, nil when absent, and must handle
 // absence itself. It assigns to out only after validation succeeds.
-type requestFieldRule struct {
+type fieldRule struct {
 	name  string
-	apply func(values []string, line RequestLine, out *RequestFields) error
+	apply func(values []string, line Line, out *Fields) error
 }
 
-// requestCrossCheck validates a relationship between fields after every field
+// crossCheck validates a relationship between fields after every field
 // rule has succeeded. It reads parsed metadata rather than reparsing fields and
 // consults headers only when occurrence information matters.
-type requestCrossCheck struct {
+type crossCheck struct {
 	name  string
-	apply func(line RequestLine, headers header.Headers, parsed RequestFields) error
+	apply func(line Line, headers header.Headers, parsed Fields) error
 }
 
-// requestFieldRules lists the field rules in evaluation order: routing and
+// fieldRules lists the field rules in evaluation order: routing and
 // framing fields first, so their errors take precedence. Fields without a rule
 // are accepted after generic header validation.
-var requestFieldRules = []requestFieldRule{
+var fieldRules = []fieldRule{
 	{name: "Host", apply: applyHostRule},
 	{name: "Content-Length", apply: applyContentLengthRule},
 	{name: "Transfer-Encoding", apply: applyTransferEncodingRule},
@@ -94,29 +94,29 @@ var requestFieldRules = []requestFieldRule{
 	{name: "Access-Control-Request-Headers", apply: applyAccessControlRequestHeadersRule},
 }
 
-// requestCrossChecks lists the cross-field checks in evaluation order.
-var requestCrossChecks = []requestCrossCheck{
+// crossChecks lists the cross-field checks in evaluation order.
+var crossChecks = []crossCheck{
 	{name: "Transfer-Encoding", apply: checkFramingConflict},
 	{name: "Trailer", apply: checkTrailerNames},
 	{name: "Connection", apply: checkConnectionOptions},
 	{name: "Expect", apply: checkExpectContent},
 }
 
-// processRequestFields runs every field rule in order and then every
+// processFields runs every field rule in order and then every
 // cross-check, wrapping the first failure in a *FieldError. On failure it
-// returns zero RequestFields so partially parsed metadata cannot escape.
-func processRequestFields(line RequestLine, headers header.Headers) (RequestFields, error) {
-	var parsed RequestFields
+// returns zero Fields so partially parsed metadata cannot escape.
+func processFields(line Line, headers header.Headers) (Fields, error) {
+	var parsed Fields
 
-	for rule := range slices.Values(requestFieldRules) {
+	for rule := range slices.Values(fieldRules) {
 		if err := rule.apply(headers.Values(rule.name), line, &parsed); err != nil {
-			return RequestFields{}, &FieldError{Name: rule.name, Err: err}
+			return Fields{}, &FieldError{Name: rule.name, Err: err}
 		}
 	}
 
-	for check := range slices.Values(requestCrossChecks) {
+	for check := range slices.Values(crossChecks) {
 		if err := check.apply(line, headers, parsed); err != nil {
-			return RequestFields{}, &FieldError{Name: check.name, Err: err}
+			return Fields{}, &FieldError{Name: check.name, Err: err}
 		}
 	}
 

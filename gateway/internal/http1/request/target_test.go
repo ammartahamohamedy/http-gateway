@@ -1,4 +1,4 @@
-package http1
+package request
 
 import (
 	"slices"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRequestLineTargetForm(t *testing.T) {
+func TestLineTargetForm(t *testing.T) {
 	tests := []struct {
 		rawLine string
 		want    TargetForm
@@ -25,7 +25,7 @@ func TestRequestLineTargetForm(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.rawLine, func(t *testing.T) {
-			line, err := parseRequestLine(test.rawLine)
+			line, err := parseLine(test.rawLine)
 			require.NoError(t, err)
 			require.Equal(t, test.want, line.TargetForm())
 		})

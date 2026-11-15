@@ -1,4 +1,4 @@
-package http1
+package request
 
 import (
 	"bufio"
@@ -12,11 +12,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var originLine = RequestLine{Method: "GET", RequestTarget: "/", Version: "1.1"}
+var originLine = Line{Method: "GET", RequestTarget: "/", Version: "1.1"}
 
-func TestRequestFieldRulesOrder(t *testing.T) {
+func TestFieldRulesOrder(t *testing.T) {
 	var names []string
-	for rule := range slices.Values(requestFieldRules) {
+	for rule := range slices.Values(fieldRules) {
 		names = append(names, rule.name)
 	}
 
@@ -27,10 +27,10 @@ func TestRequestFieldRulesOrder(t *testing.T) {
 	}, names)
 }
 
-func TestProcessRequestFieldsFirstErrorIsDeterministic(t *testing.T) {
+func TestProcessFieldsFirstErrorIsDeterministic(t *testing.T) {
 	headers := header.Headers{"host": {"a", "b"}, "content-length": {"x"}}
 	for range 20 {
-		_, err := processRequestFields(originLine, headers)
+		_, err := processFields(originLine, headers)
 		var fieldErr *FieldError
 		require.ErrorAs(t, err, &fieldErr)
 		require.Equal(t, "Host", fieldErr.Name)
@@ -38,97 +38,97 @@ func TestProcessRequestFieldsFirstErrorIsDeterministic(t *testing.T) {
 }
 
 func TestFieldErrorWrapping(t *testing.T) {
-	_, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"-1"}})
+	_, err := processFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"-1"}})
 	require.ErrorIs(t, err, fields.ErrInvalidContentLength)
 	var fieldErr *FieldError
 	require.ErrorAs(t, err, &fieldErr)
 	require.Equal(t, "Content-Length", fieldErr.Name)
 	require.Equal(t, fields.ErrInvalidContentLength.Error(), err.Error())
 
-	_, err = ReadRequest(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\n\r\n")))
+	_, err = Read(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\n\r\n")))
 	require.ErrorIs(t, err, fields.ErrInvalidHost)
 	require.ErrorAs(t, err, &fieldErr)
 	require.Equal(t, "Host", fieldErr.Name)
 }
 
-func TestReadRequestFields(t *testing.T) {
+func TestReadFields(t *testing.T) {
 	tests := []struct {
 		name    string
 		message string
-		want    RequestFields
+		want    Fields
 	}{
 		{"absent length", "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n",
-			RequestFields{Authority: "example.com"}},
+			Fields{Authority: "example.com"}},
 		{"zero length", "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 0\r\n\r\n",
-			RequestFields{Authority: "example.com", ContentLengthPresent: true}},
+			Fields{Authority: "example.com", ContentLengthPresent: true}},
 		{"positive length", "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 0042\r\n\r\n",
-			RequestFields{Authority: "example.com", ContentLength: 42, ContentLengthPresent: true}},
+			Fields{Authority: "example.com", ContentLength: 42, ContentLengthPresent: true}},
 		{"absolute authority overrides Host", "GET http://target.example:8080/ HTTP/1.1\r\nHost: other.example\r\n\r\n",
-			RequestFields{Authority: "target.example:8080"}},
+			Fields{Authority: "target.example:8080"}},
 		{"CONNECT authority", "CONNECT example.com:443 HTTP/1.1\r\nHost: other.example:443\r\n\r\n",
-			RequestFields{Authority: "example.com:443"}},
+			Fields{Authority: "example.com:443"}},
 		{"authority-less absolute", "GET urn:example:item HTTP/1.1\r\nHost:\r\n\r\n",
-			RequestFields{}},
+			Fields{}},
 		{"transfer codings", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: GZIP\r\nTransfer-Encoding: Chunked\r\n\r\n",
-			RequestFields{Authority: "example.com", TransferCodings: []string{"gzip", "chunked"}}},
+			Fields{Authority: "example.com", TransferCodings: []string{"gzip", "chunked"}}},
 		{"connection options", "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: Close\r\nConnection: TE\r\n\r\n",
-			RequestFields{Authority: "example.com", ConnectionOptions: []string{"close", "te"}}},
+			Fields{Authority: "example.com", ConnectionOptions: []string{"close", "te"}}},
 		{"expect with length", "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nExpect: 100-Continue\r\n\r\n",
-			RequestFields{Authority: "example.com", ContentLength: 5, ContentLengthPresent: true, Expectations: []string{"100-continue"}}},
+			Fields{Authority: "example.com", ContentLength: 5, ContentLengthPresent: true, Expectations: []string{"100-continue"}}},
 		{"expect with chunked framing", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n",
-			RequestFields{Authority: "example.com", TransferCodings: []string{"chunked"}, Expectations: []string{"100-continue"}}},
+			Fields{Authority: "example.com", TransferCodings: []string{"chunked"}, Expectations: []string{"100-continue"}}},
 		{"unfamiliar expectation without content", "GET / HTTP/1.1\r\nHost: example.com\r\nExpect: x-custom\r\n\r\n",
-			RequestFields{Authority: "example.com", Expectations: []string{"x-custom"}}},
+			Fields{Authority: "example.com", Expectations: []string{"x-custom"}}},
 		{"preflight fields", "OPTIONS / HTTP/1.1\r\nHost: example.com\r\nOrigin: https://app.example\r\nAccess-Control-Request-Method: PUT\r\nAccess-Control-Request-Headers: X-One, Content-Type\r\n\r\n",
-			RequestFields{Authority: "example.com", Origin: "https://app.example", AccessControlRequestMethod: "PUT",
+			Fields{Authority: "example.com", Origin: "https://app.example", AccessControlRequestMethod: "PUT",
 				AccessControlRequestHeaders: []string{"x-one", "content-type"}}},
 		{"request fields without preflight context", "GET / HTTP/1.1\r\nHost: example.com\r\nAccess-Control-Request-Method: PUT\r\n\r\n",
-			RequestFields{Authority: "example.com", AccessControlRequestMethod: "PUT"}},
+			Fields{Authority: "example.com", AccessControlRequestMethod: "PUT"}},
 		{"unknown valid fields accepted", "GET / HTTP/1.1\r\nHost: example.com\r\nX-Unfamiliar: \"a,b\"\r\nX-Unfamiliar: c\r\n\r\n",
-			RequestFields{Authority: "example.com"}},
+			Fields{Authority: "example.com"}},
 	}
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			request, err := ReadRequest(bufio.NewReader(strings.NewReader(test.message)))
+			request, err := Read(bufio.NewReader(strings.NewReader(test.message)))
 			require.NoError(t, err)
 			require.Equal(t, test.want, request.Fields)
 		})
 	}
 }
 
-func TestProcessRequestFieldsReturnsZeroOnFailure(t *testing.T) {
+func TestProcessFieldsReturnsZeroOnFailure(t *testing.T) {
 	// Host succeeds and assigns Authority before Content-Length fails.
-	parsed, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"1, 1"}})
+	parsed, err := processFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"1, 1"}})
 	require.Error(t, err)
 	require.Zero(t, parsed)
 }
 
-func TestRequestCrossChecksRunAfterFieldRules(t *testing.T) {
-	saved := requestCrossChecks
-	t.Cleanup(func() { requestCrossChecks = saved })
+func TestCrossChecksRunAfterFieldRules(t *testing.T) {
+	saved := crossChecks
+	t.Cleanup(func() { crossChecks = saved })
 
 	checkErr := errors.New("cross-check failed")
-	var seen []RequestFields
-	requestCrossChecks = []requestCrossCheck{{
+	var seen []Fields
+	crossChecks = []crossCheck{{
 		name: "Content-Length",
-		apply: func(_ RequestLine, _ header.Headers, parsed RequestFields) error {
+		apply: func(_ Line, _ header.Headers, parsed Fields) error {
 			seen = append(seen, parsed)
 			return checkErr
 		},
 	}}
 
-	_, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"x"}})
+	_, err := processFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"x"}})
 	require.ErrorIs(t, err, fields.ErrInvalidContentLength)
 	require.Empty(t, seen, "cross-checks must not run after a field rule fails")
 
-	parsed, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"7"}})
+	parsed, err := processFields(originLine, header.Headers{"host": {"example.com"}, "content-length": {"7"}})
 	require.ErrorIs(t, err, checkErr)
 	require.Zero(t, parsed)
 	var fieldErr *FieldError
 	require.ErrorAs(t, err, &fieldErr)
 	require.Equal(t, "Content-Length", fieldErr.Name)
-	require.Equal(t, []RequestFields{{Authority: "example.com", ContentLength: 7, ContentLengthPresent: true}}, seen)
+	require.Equal(t, []Fields{{Authority: "example.com", ContentLength: 7, ContentLengthPresent: true}}, seen)
 }
 
 func TestTransferEncodingErrors(t *testing.T) {
@@ -144,7 +144,7 @@ func TestTransferEncodingErrors(t *testing.T) {
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			headers := header.Headers{"host": {"example.com"}, "transfer-encoding": {test.value}}
-			parsed, err := processRequestFields(originLine, headers)
+			parsed, err := processFields(originLine, headers)
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
 			var fieldErr *FieldError
@@ -166,7 +166,7 @@ func TestFramingConflict(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			parsed, err := processRequestFields(originLine, test.headers)
+			parsed, err := processFields(originLine, test.headers)
 			require.ErrorIs(t, err, fields.ErrFramingConflict)
 			require.NotErrorIs(t, err, fields.ErrInvalidTransferEncoding)
 			require.Zero(t, parsed)
@@ -190,23 +190,23 @@ func TestInvalidTransferEncodingPrecedesFramingConflict(t *testing.T) {
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			headers := header.Headers{"host": {"example.com"}, "content-length": {"5"}, "transfer-encoding": {test.value}}
-			_, err := processRequestFields(originLine, headers)
+			_, err := processFields(originLine, headers)
 			require.ErrorIs(t, err, test.want)
 			require.NotErrorIs(t, err, fields.ErrFramingConflict)
 		})
 	}
 }
 
-func TestReadRequestRejectsFramingConflict(t *testing.T) {
+func TestReadRejectsFramingConflict(t *testing.T) {
 	message := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nTransfer-Encoding: chunked\r\n\r\n"
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	request, err := Read(bufio.NewReader(strings.NewReader(message)))
 	require.ErrorIs(t, err, fields.ErrFramingConflict)
 	require.Nil(t, request)
 }
 
 func TestConnectionErrors(t *testing.T) {
 	headers := header.Headers{"host": {"example.com"}, "connection": {"keep alive"}}
-	parsed, err := processRequestFields(originLine, headers)
+	parsed, err := processFields(originLine, headers)
 	require.ErrorIs(t, err, fields.ErrInvalidConnection)
 	require.Zero(t, parsed)
 	var fieldErr *FieldError
@@ -218,7 +218,7 @@ func TestConnectionNominatingProtectedField(t *testing.T) {
 	for value := range slices.Values([]string{"host", "Content-Length", "close, Transfer-Encoding"}) {
 		t.Run(value, func(t *testing.T) {
 			headers := header.Headers{"host": {"example.com"}, "connection": {value}}
-			parsed, err := processRequestFields(originLine, headers)
+			parsed, err := processFields(originLine, headers)
 			require.ErrorIs(t, err, fields.ErrProtectedConnectionOption)
 			require.NotErrorIs(t, err, fields.ErrInvalidConnection)
 			require.Zero(t, parsed)
@@ -237,20 +237,20 @@ func TestFramingConflictPrecedesConnectionCheck(t *testing.T) {
 		"connection":        {"content-length"},
 	}
 
-	_, err := processRequestFields(originLine, headers)
+	_, err := processFields(originLine, headers)
 	require.ErrorIs(t, err, fields.ErrFramingConflict)
 }
 
-func TestReadRequestRejectsProtectedConnectionOption(t *testing.T) {
+func TestReadRejectsProtectedConnectionOption(t *testing.T) {
 	message := "GET / HTTP/1.1\r\nHost: example.com\r\nConnection: host\r\n\r\n"
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	request, err := Read(bufio.NewReader(strings.NewReader(message)))
 	require.ErrorIs(t, err, fields.ErrProtectedConnectionOption)
 	require.Nil(t, request)
 }
 
 func TestExpectErrors(t *testing.T) {
 	headers := header.Headers{"host": {"example.com"}, "expect": {"100 continue"}}
-	parsed, err := processRequestFields(originLine, headers)
+	parsed, err := processFields(originLine, headers)
 	require.ErrorIs(t, err, fields.ErrInvalidExpect)
 	require.Zero(t, parsed)
 	var fieldErr *FieldError
@@ -269,7 +269,7 @@ func TestExpectWithoutContent(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			parsed, err := processRequestFields(originLine, test.headers)
+			parsed, err := processFields(originLine, test.headers)
 			require.ErrorIs(t, err, fields.ErrExpectWithoutContent)
 			require.NotErrorIs(t, err, fields.ErrInvalidExpect)
 			require.Zero(t, parsed)
@@ -282,13 +282,13 @@ func TestExpectWithoutContent(t *testing.T) {
 
 func TestConnectionCheckPrecedesExpectCheck(t *testing.T) {
 	headers := header.Headers{"host": {"example.com"}, "connection": {"host"}, "expect": {"100-continue"}}
-	_, err := processRequestFields(originLine, headers)
+	_, err := processFields(originLine, headers)
 	require.ErrorIs(t, err, fields.ErrProtectedConnectionOption)
 }
 
-func TestReadRequestRejectsExpectWithoutContent(t *testing.T) {
+func TestReadRejectsExpectWithoutContent(t *testing.T) {
 	message := "GET / HTTP/1.1\r\nHost: example.com\r\nExpect: 100-continue\r\n\r\n"
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	request, err := Read(bufio.NewReader(strings.NewReader(message)))
 	require.ErrorIs(t, err, fields.ErrExpectWithoutContent)
 	require.Nil(t, request)
 }
@@ -306,7 +306,7 @@ func TestMediaTypeFieldErrors(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			parsed, err := processRequestFields(originLine, test.headers)
+			parsed, err := processFields(originLine, test.headers)
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
 			var fieldErr *FieldError
@@ -329,7 +329,7 @@ func TestContentCodingFieldErrors(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			parsed, err := processRequestFields(originLine, test.headers)
+			parsed, err := processFields(originLine, test.headers)
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
 			var fieldErr *FieldError
@@ -341,17 +341,17 @@ func TestContentCodingFieldErrors(t *testing.T) {
 
 func TestContentCodingFieldsLeaveMetadataUnchanged(t *testing.T) {
 	message := "GET / HTTP/1.1\r\nHost: example.com\r\nContent-Encoding: gzip\r\nAccept-Encoding: br;q=0.5\r\n\r\n"
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	request, err := Read(bufio.NewReader(strings.NewReader(message)))
 	require.NoError(t, err)
-	require.Equal(t, RequestFields{Authority: "example.com"}, request.Fields)
+	require.Equal(t, Fields{Authority: "example.com"}, request.Fields)
 	require.Equal(t, []string{"gzip"}, request.Headers.Values("Content-Encoding"))
 }
 
 func TestMediaTypeFieldsLeaveMetadataUnchanged(t *testing.T) {
 	message := "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 0\r\nContent-Type: text/plain\r\nAccept: */*;q=0.5\r\n\r\n"
-	request, err := ReadRequest(bufio.NewReader(strings.NewReader(message)))
+	request, err := Read(bufio.NewReader(strings.NewReader(message)))
 	require.NoError(t, err)
-	require.Equal(t, RequestFields{Authority: "example.com", ContentLengthPresent: true}, request.Fields)
+	require.Equal(t, Fields{Authority: "example.com", ContentLengthPresent: true}, request.Fields)
 	require.Equal(t, []string{"text/plain"}, request.Headers.Values("Content-Type"))
 }
 
@@ -369,7 +369,7 @@ func TestCORSFieldErrors(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			parsed, err := processRequestFields(originLine, test.headers)
+			parsed, err := processFields(originLine, test.headers)
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
 			var fieldErr *FieldError
@@ -380,7 +380,7 @@ func TestCORSFieldErrors(t *testing.T) {
 }
 
 func TestTrailerField(t *testing.T) {
-	parsed, err := processRequestFields(originLine, header.Headers{
+	parsed, err := processFields(originLine, header.Headers{
 		"host":              {"example.com"},
 		"transfer-encoding": {"chunked"},
 		"trailer":           {"X-Checksum, Server-Timing"},
@@ -399,7 +399,7 @@ func TestTrailerField(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			parsed, err := processRequestFields(originLine, header.Headers{"host": {"example.com"}, "trailer": {test.value}})
+			parsed, err := processFields(originLine, header.Headers{"host": {"example.com"}, "trailer": {test.value}})
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
 			var fieldErr *FieldError

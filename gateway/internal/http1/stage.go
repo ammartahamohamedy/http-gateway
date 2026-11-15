@@ -3,7 +3,7 @@ package http1
 // Stage names a step of reading a message.
 type Stage string
 
-// Stages of ReadRequest, in order.
+// Stages of request.Read, in order.
 const (
 	StageRequestLine Stage = "request-line"
 	StageHeaders     Stage = "headers"
