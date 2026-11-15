@@ -21,36 +21,37 @@ var (
 	qvaluePattern = regexp.MustCompile(`\A(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)\z`)
 )
 
-// IsToken reports whether s is a nonempty RFC 9110 token. Methods and field
+// IsToken reports whether text is a nonempty RFC 9110 token. Methods and field
 // names use this grammar; case is not interpreted.
-func IsToken(s string) bool {
-	return tokenPattern.MatchString(s)
+func IsToken(text string) bool {
+	return tokenPattern.MatchString(text)
 }
 
-// IsDigits reports whether s is one or more ASCII decimal digits. It checks
+// IsDigits reports whether text is one or more ASCII decimal digits. It checks
 // syntax only, not numeric range.
-func IsDigits(s string) bool {
-	return digitsPattern.MatchString(s)
+func IsDigits(text string) bool {
+	return digitsPattern.MatchString(text)
 }
 
-// IsHexDigits reports whether s is one or more ASCII hexadecimal digits. It
+// IsHexDigits reports whether text is one or more ASCII hexadecimal digits. It
 // checks syntax only, not numeric range.
-func IsHexDigits(s string) bool {
-	return hexDigitsPattern.MatchString(s)
+func IsHexDigits(text string) bool {
+	return hexDigitsPattern.MatchString(text)
 }
 
-// IsQValue reports whether s is a valid weight value, such as "0.5" or "1.000".
-func IsQValue(s string) bool {
-	return qvaluePattern.MatchString(s)
+// IsQValue reports whether text is a valid weight value, such as "0.5" or
+// "1.000".
+func IsQValue(text string) bool {
+	return qvaluePattern.MatchString(text)
 }
 
-// IsFieldValue reports whether s contains only field-value bytes: visible
+// IsFieldValue reports whether text contains only field-value bytes: visible
 // ASCII, SP, HTAB, and obs-text (0x80-0xFF). It rejects other controls and DEL.
 // Surrounding whitespace is permitted; callers trim it as their grammar requires.
-func IsFieldValue(s string) bool {
-	for i := range len(s) {
-		b := s[i]
-		if (b < 0x20 && b != '\t') || b == 0x7f {
+func IsFieldValue(text string) bool {
+	for index := range len(text) {
+		octet := text[index]
+		if (octet < 0x20 && octet != '\t') || octet == 0x7f {
 			return false
 		}
 	}

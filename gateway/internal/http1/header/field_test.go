@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestParseHeaderField(t *testing.T) {
+func TestParseField(t *testing.T) {
 	tests := []struct {
 		name      string
 		rawLine   string
@@ -29,7 +29,7 @@ func TestParseHeaderField(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			name, value, err := parseHeaderField(test.rawLine)
+			name, value, err := parseField(test.rawLine)
 			require.NoError(t, err)
 			require.Equal(t, test.wantName, name)
 			require.Equal(t, test.wantValue, value)
@@ -37,7 +37,7 @@ func TestParseHeaderField(t *testing.T) {
 	}
 }
 
-func TestParseHeaderFieldRejectsMalformedInput(t *testing.T) {
+func TestParseFieldRejectsMalformedInput(t *testing.T) {
 	tests := []struct {
 		name    string
 		rawLine string
@@ -61,7 +61,7 @@ func TestParseHeaderFieldRejectsMalformedInput(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			name, value, err := parseHeaderField(test.rawLine)
+			name, value, err := parseField(test.rawLine)
 			require.Error(t, err)
 			require.Empty(t, name)
 			require.Empty(t, value)
@@ -69,12 +69,12 @@ func TestParseHeaderFieldRejectsMalformedInput(t *testing.T) {
 	}
 }
 
-func TestParseHeaderFieldValueBytes(t *testing.T) {
-	for b := 0; b <= 255; b++ {
-		t.Run(fmt.Sprintf("0x%02X", b), func(t *testing.T) {
-			value := "a" + string([]byte{byte(b)}) + "z"
-			name, gotValue, err := parseHeaderField("X-Test: " + value)
-			if (b < 0x20 && b != 0x09) || b == 0x7f {
+func TestParseFieldValueBytes(t *testing.T) {
+	for octet := 0; octet <= 255; octet++ {
+		t.Run(fmt.Sprintf("0x%02X", octet), func(t *testing.T) {
+			value := "a" + string([]byte{byte(octet)}) + "z"
+			name, gotValue, err := parseField("X-Test: " + value)
+			if (octet < 0x20 && octet != 0x09) || octet == 0x7f {
 				require.Error(t, err)
 				require.Empty(t, name)
 				require.Empty(t, gotValue)

@@ -33,7 +33,7 @@ func Read(reader *bufio.Reader) (*Message, error) {
 	}
 
 	// Header stage: read, unfold, and parse the complete header section.
-	if message.Headers, err = header.ReadHeadersSection(reader, headerLimits); err != nil {
+	if message.Headers, err = header.Read(reader, headerLimits); err != nil {
 		return nil, &http1.StageError{Stage: http1.StageHeaders, Err: err}
 	}
 

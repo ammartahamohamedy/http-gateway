@@ -20,6 +20,6 @@ type StatusLine struct {
 // stream. The type itself does not parse or validate these fields.
 type Message struct {
 	StatusLine StatusLine
-	Headers    header.Headers
+	Headers    header.Section
 	Body       io.ReadCloser
 }

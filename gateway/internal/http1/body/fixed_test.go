@@ -17,10 +17,10 @@ func TestFixedReaderReadsExactLength(t *testing.T) {
 		name   string
 		source func(string) io.Reader
 	}{
-		{"buffered", func(s string) io.Reader { return strings.NewReader(s) }},
-		{"one byte per read", func(s string) io.Reader { return iotest.OneByteReader(strings.NewReader(s)) }},
-		{"data with EOF", func(s string) io.Reader { return iotest.DataErrReader(strings.NewReader(s)) }},
-		{"half reads", func(s string) io.Reader { return iotest.HalfReader(strings.NewReader(s)) }},
+		{"buffered", func(text string) io.Reader { return strings.NewReader(text) }},
+		{"one byte per read", func(text string) io.Reader { return iotest.OneByteReader(strings.NewReader(text)) }},
+		{"data with EOF", func(text string) io.Reader { return iotest.DataErrReader(strings.NewReader(text)) }},
+		{"half reads", func(text string) io.Reader { return iotest.HalfReader(strings.NewReader(text)) }},
 	}
 
 	for test := range slices.Values(tests) {

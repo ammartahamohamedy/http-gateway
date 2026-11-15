@@ -7,15 +7,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHeadersValues(t *testing.T) {
-	headers := Headers{
+func TestSectionValues(t *testing.T) {
+	headers := Section{
 		"x-test":       {"first", "\"second,third\"\tpart\xff", ""},
 		"content-type": {"text/plain; charset=utf-8"},
 	}
 
 	tests := []struct {
 		name    string
-		headers Headers
+		headers Section
 		query   string
 		want    []string
 	}{
@@ -25,7 +25,7 @@ func TestHeadersValues(t *testing.T) {
 		{"single value", headers, "content-type", []string{"text/plain; charset=utf-8"}},
 		{"missing name", headers, "Host", nil},
 		{"nil headers", nil, "X-Test", nil},
-		{"empty headers", Headers{}, "X-Test", nil},
+		{"empty headers", Section{}, "X-Test", nil},
 	}
 
 	for test := range slices.Values(tests) {
@@ -35,10 +35,10 @@ func TestHeadersValues(t *testing.T) {
 	}
 }
 
-func TestHeadersValuesReturnsIndependentSlice(t *testing.T) {
-	headers := Headers{"x-test": {"original"}}
+func TestSectionValuesReturnsIndependentSlice(t *testing.T) {
+	headers := Section{"x-test": {"original"}}
 	values := headers.Values("x-test")
 	require.Equal(t, []string{"original"}, values)
 	values[0] = "changed"
-	require.Equal(t, Headers{"x-test": {"original"}}, headers)
+	require.Equal(t, Section{"x-test": {"original"}}, headers)
 }

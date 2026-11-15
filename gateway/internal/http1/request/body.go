@@ -36,7 +36,7 @@ func messageBody(reader *bufio.Reader, message *Message) (io.ReadCloser, error) 
 		}
 		return body.NewFixedReader(reader, parsed.ContentLength), nil
 	case body.Chunked:
-		chunked := body.NewChunkedReader(reader, maxBodyBytes, func(trailers header.Headers) {
+		chunked := body.NewChunkedReader(reader, maxBodyBytes, func(trailers header.Section) {
 			message.Trailers = allowedTrailers(trailers)
 		})
 		codings := parsed.TransferCodings[:len(parsed.TransferCodings)-1]
@@ -48,7 +48,7 @@ func messageBody(reader *bufio.Reader, message *Message) (io.ReadCloser, error) 
 
 // allowedTrailers returns the trailer fields that fields.IsAllowedTrailer
 // permits, or nil when none remain. The input is not changed.
-func allowedTrailers(trailers header.Headers) header.Headers {
+func allowedTrailers(trailers header.Section) header.Section {
 	allowed := maps.Clone(trailers)
 	maps.DeleteFunc(allowed, func(name string, _ []string) bool {
 		return !fields.IsAllowedTrailer(name)

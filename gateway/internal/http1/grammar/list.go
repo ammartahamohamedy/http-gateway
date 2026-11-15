@@ -26,25 +26,25 @@ func SplitList(value string) ([]string, bool) {
 	return members, true
 }
 
-// SplitUnquoted splits s at every sep outside a quoted-string, keeping empty
+// SplitUnquoted splits text at every sep outside a quoted-string, keeping empty
 // parts and all other bytes. A backslash escapes the next byte only inside a
 // quoted-string. It reports false for an unterminated quoted-string.
-func SplitUnquoted(s string, sep byte) ([]string, bool) {
+func SplitUnquoted(text string, sep byte) ([]string, bool) {
 	var parts []string
 	start := 0
 	quoted, escaped := false, false
 
-	for i, b := range []byte(s) {
+	for index, octet := range []byte(text) {
 		switch {
 		case escaped:
 			escaped = false
-		case quoted && b == '\\':
+		case quoted && octet == '\\':
 			escaped = true
-		case b == '"':
+		case octet == '"':
 			quoted = !quoted
-		case !quoted && b == sep:
-			parts = append(parts, s[start:i])
-			start = i + 1
+		case !quoted && octet == sep:
+			parts = append(parts, text[start:index])
+			start = index + 1
 		}
 	}
 
@@ -52,33 +52,33 @@ func SplitUnquoted(s string, sep byte) ([]string, bool) {
 		return nil, false
 	}
 
-	return append(parts, s[start:]), true
+	return append(parts, text[start:]), true
 }
 
 // TrimOWS removes surrounding optional whitespace: SP and HTAB only.
-func TrimOWS(s string) string {
-	return strings.Trim(s, " \t")
+func TrimOWS(text string) string {
+	return strings.Trim(text, " \t")
 }
 
-// IsQuotedString reports whether s is exactly one RFC 9110 quoted-string,
+// IsQuotedString reports whether text is exactly one RFC 9110 quoted-string,
 // including its surrounding quotes (Section 5.6.4). Bytes are checked directly
 // so obs-text is accepted whether or not it is valid UTF-8.
-func IsQuotedString(s string) bool {
-	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
+func IsQuotedString(text string) bool {
+	if len(text) < 2 || text[0] != '"' || text[len(text)-1] != '"' {
 		return false
 	}
 
 	escaped := false
-	for i := 1; i < len(s)-1; i++ {
-		b := s[i]
+	for index := 1; index < len(text)-1; index++ {
+		octet := text[index]
 		switch {
-		case (b < 0x20 && b != '\t') || b == 0x7f:
+		case (octet < 0x20 && octet != '\t') || octet == 0x7f:
 			return false
 		case escaped:
 			escaped = false
-		case b == '\\':
+		case octet == '\\':
 			escaped = true
-		case b == '"':
+		case octet == '"':
 			return false
 		}
 	}
@@ -86,19 +86,20 @@ func IsQuotedString(s string) bool {
 	return !escaped
 }
 
-// IsParameter reports whether s is exactly one RFC 9110 parameter:
+// IsParameter reports whether text is exactly one RFC 9110 parameter:
 // token "=" ( token / quoted-string ), with no whitespace around "=" (Section
 // 5.6.6). Fields that allow bad whitespace there check it themselves.
-func IsParameter(s string) bool {
-	name, value, found := strings.Cut(s, "=")
+func IsParameter(text string) bool {
+	name, value, found := strings.Cut(text, "=")
 	return found && IsToken(name) && (IsToken(value) || IsQuotedString(value))
 }
 
-// IsChunkExtension reports whether s is one chunk extension without its ";":
+// IsChunkExtension reports whether text is one chunk extension without its ";":
 // chunk-ext-name [ BWS "=" BWS chunk-ext-val ], where the value is a token or
-// quoted-string (RFC 9112, Section 7.1.1). Whitespace around s is the caller's.
-func IsChunkExtension(s string) bool {
-	name, value, hasValue := strings.Cut(s, "=")
+// quoted-string (RFC 9112, Section 7.1.1). Whitespace around text is the
+// caller's.
+func IsChunkExtension(text string) bool {
+	name, value, hasValue := strings.Cut(text, "=")
 	if !hasValue {
 		return IsToken(name)
 	}

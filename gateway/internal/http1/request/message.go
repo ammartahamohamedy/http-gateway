@@ -12,10 +12,10 @@ import (
 // for chunked framing.
 type Message struct {
 	Line    Line
-	Headers header.Headers
+	Headers header.Section
 	Fields  Fields
 	Body    io.ReadCloser
 
 	// Trailers holds the allowed trailer fields, set once Body returns io.EOF.
-	Trailers header.Headers
+	Trailers header.Section
 }

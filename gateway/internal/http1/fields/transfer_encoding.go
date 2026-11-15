@@ -150,11 +150,11 @@ func parseTransferCoding(member string) (string, bool) {
 	return name, true
 }
 
-// isTransferParameter reports whether s is OWS transfer-parameter OWS, where
+// isTransferParameter reports whether text is OWS transfer-parameter OWS, where
 // transfer-parameter is token BWS "=" BWS ( token / quoted-string ) (RFC 9110,
 // Section 10.1.4).
-func isTransferParameter(s string) bool {
-	name, value, found := strings.Cut(s, "=")
+func isTransferParameter(text string) bool {
+	name, value, found := strings.Cut(text, "=")
 	if !found || !grammar.IsToken(grammar.TrimOWS(name)) {
 		return false
 	}

@@ -221,18 +221,18 @@ func TestChunkedReaderPassesTrailers(t *testing.T) {
 	tests := []struct {
 		name string
 		wire string
-		want header.Headers
+		want header.Section
 	}{
 		{"no trailers", "5\r\nhello\r\n0\r\n\r\n", nil},
 		{"trailers", "5\r\nhello\r\n0\r\nX-Checksum: abc\r\nx-checksum: def\r\nServer-Timing: db\r\n\r\n",
-			header.Headers{"x-checksum": {"abc", "def"}, "server-timing": {"db"}}},
+			header.Section{"x-checksum": {"abc", "def"}, "server-timing": {"db"}}},
 	}
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
-			var got header.Headers
-			reader := NewChunkedReader(bufio.NewReader(strings.NewReader(test.wire)), chunkedTestLimit, func(trailers header.Headers) {
+			var got header.Section
+			reader := NewChunkedReader(bufio.NewReader(strings.NewReader(test.wire)), chunkedTestLimit, func(trailers header.Section) {
 				calls++
 				got = trailers
 			})
@@ -250,7 +250,7 @@ func TestChunkedReaderPassesTrailers(t *testing.T) {
 
 func TestChunkedReaderSkipsCallbackOnError(t *testing.T) {
 	called := false
-	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("0\r\nno colon\r\n\r\n")), chunkedTestLimit, func(header.Headers) { called = true })
+	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("0\r\nno colon\r\n\r\n")), chunkedTestLimit, func(header.Section) { called = true })
 	_, err := io.ReadAll(reader)
 	require.Error(t, err)
 	require.False(t, called)

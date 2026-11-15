@@ -57,31 +57,31 @@ func TestTrimOWS(t *testing.T) {
 }
 
 func TestIsQuotedString(t *testing.T) {
-	for s := range slices.Values([]string{`""`, `"a b"`, "\"a\tb\"", `"a\"b"`, `"a\\"`, `"(,;=)"`, "\"\x80\xff\"", "\"\\\xff\""}) {
-		require.True(t, IsQuotedString(s), "%q", s)
+	for text := range slices.Values([]string{`""`, `"a b"`, "\"a\tb\"", `"a\"b"`, `"a\\"`, `"(,;=)"`, "\"\x80\xff\"", "\"\\\xff\""}) {
+		require.True(t, IsQuotedString(text), "%q", text)
 	}
 
-	for s := range slices.Values([]string{"", `"`, `a`, `"a`, `a"`, `"a"b"`, `"a\"`, "\"a\x00\"", "\"a\x7f\"", "\"a\nb\"", "\"\\\x01\""}) {
-		require.False(t, IsQuotedString(s), "%q", s)
+	for text := range slices.Values([]string{"", `"`, `a`, `"a`, `a"`, `"a"b"`, `"a\"`, "\"a\x00\"", "\"a\x7f\"", "\"a\nb\"", "\"\\\x01\""}) {
+		require.False(t, IsQuotedString(text), "%q", text)
 	}
 }
 
 func TestIsParameter(t *testing.T) {
-	for s := range slices.Values([]string{"a=b", `a="b c"`, `a="x=y"`, `a=""`}) {
-		require.True(t, IsParameter(s), "%q", s)
+	for text := range slices.Values([]string{"a=b", `a="b c"`, `a="x=y"`, `a=""`}) {
+		require.True(t, IsParameter(text), "%q", text)
 	}
 
-	for s := range slices.Values([]string{"", "a", "=b", "a=", "a =b", "a= b", "a=b=c", `a="b`, `"a"=b`}) {
-		require.False(t, IsParameter(s), "%q", s)
+	for text := range slices.Values([]string{"", "a", "=b", "a=", "a =b", "a= b", "a=b=c", `a="b`, `"a"=b`}) {
+		require.False(t, IsParameter(text), "%q", text)
 	}
 }
 
 func TestIsChunkExtension(t *testing.T) {
-	for s := range slices.Values([]string{"a", "a=b", "a = b", "a=\t\"b;c\"", `a="x=y"`, `a=""`}) {
-		require.True(t, IsChunkExtension(s), "%q", s)
+	for text := range slices.Values([]string{"a", "a=b", "a = b", "a=\t\"b;c\"", `a="x=y"`, `a=""`}) {
+		require.True(t, IsChunkExtension(text), "%q", text)
 	}
 
-	for s := range slices.Values([]string{"", " a", "a ", "=b", "a=", "a b", "a=b c", "a=b=c", `a="b`, `"a"=b`}) {
-		require.False(t, IsChunkExtension(s), "%q", s)
+	for text := range slices.Values([]string{"", " a", "a ", "=b", "a=", "a b", "a=b c", "a=b=c", `a="b`, `"a"=b`}) {
+		require.False(t, IsChunkExtension(text), "%q", text)
 	}
 }

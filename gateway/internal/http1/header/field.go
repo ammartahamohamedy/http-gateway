@@ -7,11 +7,11 @@ import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
 )
 
-// parseHeaderField parses one field line without CRLF. It preserves name casing and
+// parseField parses one field line without CRLF. It preserves name casing and
 // value bytes, removing only surrounding SP/HTAB from the value. It checks
 // generic syntax, not field-specific semantics, and does not enforce size limits.
 // On error, both returned strings are empty.
-func parseHeaderField(rawLine string) (name, value string, err error) {
+func parseField(rawLine string) (name, value string, err error) {
 	name, value, found := strings.Cut(rawLine, ":")
 	if !found {
 		return "", "", errors.New("http1: header field is missing a colon")

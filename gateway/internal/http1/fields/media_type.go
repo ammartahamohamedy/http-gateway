@@ -103,10 +103,10 @@ func isAcceptMember(member string) bool {
 	return true
 }
 
-// isMediaRange reports whether s is */*, type/*, or type/subtype. A "*" is a
+// isMediaRange reports whether text is */*, type/*, or type/subtype. A "*" is a
 // valid token, so */subtype needs its own rejection.
-func isMediaRange(s string) bool {
-	mediaType, subtype, found := strings.Cut(s, "/")
+func isMediaRange(text string) bool {
+	mediaType, subtype, found := strings.Cut(text, "/")
 	if !found || !grammar.IsToken(mediaType) || !grammar.IsToken(subtype) {
 		return false
 	}

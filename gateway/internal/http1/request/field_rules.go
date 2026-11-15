@@ -119,7 +119,7 @@ func applyAccessControlRequestHeadersRule(values []string, _ Line, out *Fields) 
 // checkFramingConflict rejects a request framed by both Transfer-Encoding and
 // Content-Length rather than letting one override the other (RFC 9112, Section
 // 6.3). This is strict by choice: Content-Length: 0 conflicts too.
-func checkFramingConflict(_ Line, _ header.Headers, parsed Fields) error {
+func checkFramingConflict(_ Line, _ header.Section, parsed Fields) error {
 	if parsed.ContentLengthPresent && len(parsed.TransferCodings) > 0 {
 		return fields.ErrFramingConflict
 	}
@@ -128,18 +128,18 @@ func checkFramingConflict(_ Line, _ header.Headers, parsed Fields) error {
 }
 
 // checkTrailerNames applies fields.ValidateTrailerNames.
-func checkTrailerNames(_ Line, _ header.Headers, parsed Fields) error {
+func checkTrailerNames(_ Line, _ header.Section, parsed Fields) error {
 	return fields.ValidateTrailerNames(parsed.TrailerNames)
 }
 
 // checkConnectionOptions applies fields.ValidateConnectionOptions.
-func checkConnectionOptions(_ Line, _ header.Headers, parsed Fields) error {
+func checkConnectionOptions(_ Line, _ header.Section, parsed Fields) error {
 	return fields.ValidateConnectionOptions(parsed.ConnectionOptions)
 }
 
 // checkExpectContent applies fields.ValidateExpectContent. Chunked framing counts
 // as content.
-func checkExpectContent(_ Line, _ header.Headers, parsed Fields) error {
+func checkExpectContent(_ Line, _ header.Section, parsed Fields) error {
 	hasContent := parsed.ContentLength > 0 || len(parsed.TransferCodings) > 0
 	return fields.ValidateExpectContent(parsed.Expectations, hasContent)
 }

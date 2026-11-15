@@ -55,9 +55,9 @@ type FieldError struct {
 	Err  error
 }
 
-func (e *FieldError) Error() string { return e.Err.Error() }
+func (fieldErr *FieldError) Error() string { return fieldErr.Err.Error() }
 
-func (e *FieldError) Unwrap() error { return e.Err }
+func (fieldErr *FieldError) Unwrap() error { return fieldErr.Err }
 
 // fieldRule parses and validates one named field. apply receives only
 // that field's separate field-line values, nil when absent, and must handle
@@ -72,7 +72,7 @@ type fieldRule struct {
 // consults headers only when occurrence information matters.
 type crossCheck struct {
 	name  string
-	apply func(line Line, headers header.Headers, parsed Fields) error
+	apply func(line Line, headers header.Section, parsed Fields) error
 }
 
 // fieldRules lists the field rules in evaluation order: routing and
@@ -105,7 +105,7 @@ var crossChecks = []crossCheck{
 // processFields runs every field rule in order and then every
 // cross-check, wrapping the first failure in a *FieldError. On failure it
 // returns zero Fields so partially parsed metadata cannot escape.
-func processFields(line Line, headers header.Headers) (Fields, error) {
+func processFields(line Line, headers header.Section) (Fields, error) {
 	var parsed Fields
 
 	for rule := range slices.Values(fieldRules) {

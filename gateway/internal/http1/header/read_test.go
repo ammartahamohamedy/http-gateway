@@ -15,7 +15,7 @@ import (
 // testLimits matches the request limits used by request.Read.
 var testLimits = Limits{LineBytes: 8 * 1024, SectionBytes: 32 * 1024, Fields: 100}
 
-func TestReadHeadersSectionLimits(t *testing.T) {
+func TestReadLimits(t *testing.T) {
 	fieldLine := func(size int) string { return "X: " + strings.Repeat("a", size-3) }
 	prefix := strings.Repeat(fieldLine(testLimits.LineBytes)+"\r\n", 3)
 	lastLineSize := testLimits.SectionBytes - len(prefix) - 4
@@ -45,7 +45,7 @@ func TestReadHeadersSectionLimits(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			headers, err := ReadHeadersSection(bufio.NewReaderSize(strings.NewReader(test.section), 16), testLimits)
+			headers, err := Read(bufio.NewReaderSize(strings.NewReader(test.section), 16), testLimits)
 			if test.wantErr != nil {
 				require.ErrorIs(t, err, test.wantErr)
 				require.Nil(t, headers)
@@ -61,7 +61,7 @@ func TestReadHeadersSectionLimits(t *testing.T) {
 	}
 }
 
-func TestReadHeadersSectionRejectsMalformedSections(t *testing.T) {
+func TestReadRejectsMalformedSections(t *testing.T) {
 	tests := []struct {
 		name    string
 		section string
@@ -74,7 +74,7 @@ func TestReadHeadersSectionRejectsMalformedSections(t *testing.T) {
 	}
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			headers, err := ReadHeadersSection(bufio.NewReader(strings.NewReader(test.section)), testLimits)
+			headers, err := Read(bufio.NewReader(strings.NewReader(test.section)), testLimits)
 			require.Error(t, err)
 			if test.want != nil {
 				require.ErrorIs(t, err, test.want)
@@ -84,10 +84,10 @@ func TestReadHeadersSectionRejectsMalformedSections(t *testing.T) {
 	}
 }
 
-func TestReadHeadersSectionPropagatesReadErrors(t *testing.T) {
+func TestReadPropagatesReadErrors(t *testing.T) {
 	errSource := errors.New("connection reset")
 	source := io.MultiReader(strings.NewReader("X: v\r\n"), &failingReader{err: errSource})
-	headers, err := ReadHeadersSection(bufio.NewReader(source), testLimits)
+	headers, err := Read(bufio.NewReader(source), testLimits)
 	require.ErrorIs(t, err, errSource)
 	require.Nil(t, headers)
 }

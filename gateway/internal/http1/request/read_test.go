@@ -28,10 +28,10 @@ func TestReadSizeLimit(t *testing.T) {
 	require.NoError(t, err)
 	parsed, err := Read(bufio.NewReader(strings.NewReader(rawLine + "\r\nHost: example.com\r\n\r\n")))
 	require.NoError(t, err)
-	require.Equal(t, &Message{Line: line, Headers: header.Headers{"host": {"example.com"}}, Fields: Fields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
+	require.Equal(t, &Message{Line: line, Headers: header.Section{"host": {"example.com"}}, Fields: Fields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
 	parsed, err = Read(bufio.NewReaderSize(strings.NewReader(rawLine+"\r\nHost: example.com\r\n\r\n"), maxLineBytes+1))
 	require.NoError(t, err)
-	require.Equal(t, &Message{Line: line, Headers: header.Headers{"host": {"example.com"}}, Fields: Fields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
+	require.Equal(t, &Message{Line: line, Headers: header.Section{"host": {"example.com"}}, Fields: Fields{Authority: "example.com"}}, requireEmptyBody(t, parsed))
 	_, err = Read(bufio.NewReader(strings.NewReader(rawLine + "\r")))
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 
@@ -77,7 +77,7 @@ func TestRead(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, &Message{
 				Line:    Line{Method: "GET", RequestTarget: "/", Version: "1.1"},
-				Headers: header.Headers{"host": {"example.com"}},
+				Headers: header.Section{"host": {"example.com"}},
 				Fields:  Fields{Authority: "example.com"},
 			}, requireEmptyBody(t, request))
 		})
@@ -89,7 +89,7 @@ func TestReadPreservesRemainingBytes(t *testing.T) {
 	reader := bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n" + remainder))
 	request, err := Read(reader)
 	require.NoError(t, err)
-	require.Equal(t, header.Headers{"host": {"example.com"}}, request.Headers)
+	require.Equal(t, header.Section{"host": {"example.com"}}, request.Headers)
 	require.Equal(t, []string{"example.com"}, request.Headers.Values("HOST"))
 	require.NotNil(t, request.Body)
 	remaining, err := io.ReadAll(reader)
@@ -278,7 +278,7 @@ func TestReadBeforeConnectionCloses(t *testing.T) {
 	case got := <-parsed:
 		require.NoError(t, got.err)
 		require.Equal(t, "/live", got.request.Line.RequestTarget)
-		require.Equal(t, header.Headers{"host": {"example.com"}}, got.request.Headers)
+		require.Equal(t, header.Section{"host": {"example.com"}}, got.request.Headers)
 	case <-time.After(5 * time.Second):
 		require.FailNow(t, "parser waited for connection EOF after complete headers")
 	}
@@ -298,7 +298,7 @@ func TestReadHeadersAndUnfolding(t *testing.T) {
 		"X-Bytes: \x80\xff\xc3\r\n" +
 		"Set-Cookie: a=1; Expires=Wed, 09 Jun 2027 10:18:14 GMT\r\n" +
 		"X-Test: last\r\nset-cookie: b=2\r\n\r\nbody"
-	want := header.Headers{
+	want := header.Section{
 		"x-test":     {"first second  \tpart third:fourth", "\"a,b\"", "last"},
 		"host":       {"example.com"},
 		"x-empty":    {""},
@@ -334,7 +334,7 @@ func TestReadHeaderFragmentation(t *testing.T) {
 			reader := bufio.NewReaderSize(source, 16)
 			request, err := Read(reader)
 			require.NoError(t, err)
-			require.Equal(t, header.Headers{"x": {"first second"}, "y": {"last"}, "host": {"example.com"}}, request.Headers)
+			require.Equal(t, header.Section{"x": {"first second"}, "y": {"last"}, "host": {"example.com"}}, request.Headers)
 			body, err := io.ReadAll(reader)
 			require.NoError(t, err)
 			require.Equal(t, "body", string(body))

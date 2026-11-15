@@ -29,19 +29,19 @@ var (
 	ErrTooManyFields = errors.New("http1: header section exceeds its field limit")
 )
 
-// ReadHeadersSection reads the bounded header section, unfolds continuations, and
-// validates each field's generic syntax with parseHeaderField. It lowercases names
+// Read reads the bounded header section, unfolds continuations, and
+// validates each field's generic syntax with parseField. It lowercases names
 // and appends values in order for each name without combining them. It does not
 // validate field-specific semantics or message framing.
-func ReadHeadersSection(reader *bufio.Reader, limits Limits) (Headers, error) {
-	var headers Headers
+func Read(reader *bufio.Reader, limits Limits) (Section, error) {
+	var headers Section
 	var pending strings.Builder
 
 	sectionBytes := 0
 	fieldCount := 0
 
 	for {
-		rawLine, err := readHeaderLine(reader, limits, sectionBytes)
+		rawLine, err := readLine(reader, limits, sectionBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -76,11 +76,11 @@ func ReadHeadersSection(reader *bufio.Reader, limits Limits) (Headers, error) {
 	}
 }
 
-// readHeaderLine reads one physical header line within limits.LineBytes and the
+// readLine reads one physical header line within limits.LineBytes and the
 // section bytes left. An oversized line returns ErrLineTooLong, or
 // ErrSectionTooLarge when the section budget is the tighter limit; EOF returns
 // io.ErrUnexpectedEOF, since the section is unfinished.
-func readHeaderLine(reader *bufio.Reader, limits Limits, sectionBytes int) (string, error) {
+func readLine(reader *bufio.Reader, limits Limits, sectionBytes int) (string, error) {
 	lineLimit := min(limits.LineBytes, limits.SectionBytes-sectionBytes-2)
 	if lineLimit < 0 {
 		return "", ErrSectionTooLarge
@@ -103,16 +103,16 @@ func readHeaderLine(reader *bufio.Reader, limits Limits, sectionBytes int) (stri
 	return rawLine, nil
 }
 
-// addField parses one unfolded field line with parseHeaderField and appends its
+// addField parses one unfolded field line with parseField and appends its
 // value under the lowercase name, creating headers when nil.
-func addField(headers Headers, line string) (Headers, error) {
-	name, value, err := parseHeaderField(line)
+func addField(headers Section, line string) (Section, error) {
+	name, value, err := parseField(line)
 	if err != nil {
 		return nil, err
 	}
 
 	if headers == nil {
-		headers = make(Headers)
+		headers = make(Section)
 	}
 
 	name = strings.ToLower(name)

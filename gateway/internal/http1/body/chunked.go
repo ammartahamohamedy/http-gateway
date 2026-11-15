@@ -32,14 +32,14 @@ var trailerLimits = header.Limits{
 // maxBytes returns ErrBodyTooLarge; a negative maxBytes is treated as zero. Malformed framing returns ErrInvalidFraming, and an early end of source
 // returns io.ErrUnexpectedEOF. Errors are sticky. Close stops further reads
 // without closing or draining source.
-func NewChunkedReader(source *bufio.Reader, maxBytes int64, onTrailers func(header.Headers)) io.ReadCloser {
+func NewChunkedReader(source *bufio.Reader, maxBytes int64, onTrailers func(header.Section)) io.ReadCloser {
 	return &chunkedReader{source: source, allowance: max(maxBytes, 0), onTrailers: onTrailers}
 }
 
 type chunkedReader struct {
 	closeGuard
 	source     *bufio.Reader
-	onTrailers func(header.Headers)
+	onTrailers func(header.Section)
 	allowance  int64 // decoded bytes still permitted
 	remaining  int64 // data bytes left in the current chunk
 	err        error // sticky; io.EOF after the last chunk and trailers
@@ -92,7 +92,7 @@ func (chunked *chunkedReader) nextChunk() error {
 	}
 
 	if size == 0 {
-		trailers, err := header.ReadHeadersSection(chunked.source, trailerLimits)
+		trailers, err := header.Read(chunked.source, trailerLimits)
 		if err != nil {
 			return fmt.Errorf("http1: reading trailers: %w", err)
 		}

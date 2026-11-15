@@ -2,7 +2,7 @@
 
 The handwritten Go HTTP/1.1 component of HTTP Gateway. Run the commands below
 from this `gateway` directory. Full request/response forwarding is planned;
-the current executable parses only the request head as described below.
+the current executable reads one request, head and body, as described below.
 
 ## Requirements
 
@@ -37,7 +37,7 @@ Press `Ctrl+C` to stop the server.
 go test -v ./...
 ```
 
-Tests cover request-line and header parsing, field validation, target policy, and shared CRLF reading, including size limits, empty lines, fragmented reads, and preservation of subsequent bytes.
+Tests cover request-line and header parsing, field validation, target policy, shared CRLF reading, body framing, chunked and gzip/deflate decoding, trailers, `100 Continue`, and body timeouts, including size limits, empty lines, fragmented reads, and preservation of subsequent bytes.
 
 ## Manual verification
 

@@ -130,11 +130,11 @@ func TestReadTrailers(t *testing.T) {
 	tests := []struct {
 		name     string
 		trailers string
-		want     header.Headers
+		want     header.Section
 	}{
 		{"no trailers", "", nil},
-		{"allowed trailers kept", "X-Checksum: abc\r\nServer-Timing: db\r\n", header.Headers{"x-checksum": {"abc"}, "server-timing": {"db"}}},
-		{"forbidden trailers dropped", "X-Checksum: abc\r\nContent-Length: 50\r\nHost: evil.example\r\n", header.Headers{"x-checksum": {"abc"}}},
+		{"allowed trailers kept", "X-Checksum: abc\r\nServer-Timing: db\r\n", header.Section{"x-checksum": {"abc"}, "server-timing": {"db"}}},
+		{"forbidden trailers dropped", "X-Checksum: abc\r\nContent-Length: 50\r\nHost: evil.example\r\n", header.Section{"x-checksum": {"abc"}}},
 		{"only forbidden trailers", "Transfer-Encoding: chunked\r\n", nil},
 	}
 
@@ -160,9 +160,9 @@ func TestReadContentLengthBodyHasNoTrailers(t *testing.T) {
 }
 
 func TestAllowedTrailersKeepsInput(t *testing.T) {
-	trailers := header.Headers{"x-checksum": {"abc"}, "host": {"evil.example"}}
-	require.Equal(t, header.Headers{"x-checksum": {"abc"}}, allowedTrailers(trailers))
-	require.Equal(t, header.Headers{"x-checksum": {"abc"}, "host": {"evil.example"}}, trailers)
+	trailers := header.Section{"x-checksum": {"abc"}, "host": {"evil.example"}}
+	require.Equal(t, header.Section{"x-checksum": {"abc"}}, allowedTrailers(trailers))
+	require.Equal(t, header.Section{"x-checksum": {"abc"}, "host": {"evil.example"}}, trailers)
 	require.Nil(t, allowedTrailers(nil))
 }
 
@@ -183,7 +183,7 @@ func TestReadDecodesGzipTransferCoding(t *testing.T) {
 			content, err := io.ReadAll(request.Body)
 			require.NoError(t, err)
 			require.Equal(t, "hello world", string(content))
-			require.Equal(t, header.Headers{"x-checksum": {"abc"}}, request.Trailers)
+			require.Equal(t, header.Section{"x-checksum": {"abc"}}, request.Trailers)
 			remaining, err := io.ReadAll(reader)
 			require.NoError(t, err)
 			require.Equal(t, "NEXT", string(remaining))
