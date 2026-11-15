@@ -72,3 +72,12 @@ func TestIsParameter(t *testing.T) {
 		require.False(t, IsParameter(s), "%q", s)
 	}
 }
+
+func TestIsChunkExtension(t *testing.T) {
+	for s := range slices.Values([]string{"a", "a=b", "a = b", "a=\t\"b;c\"", `a="x=y"`, `a=""`}) {
+		require.True(t, IsChunkExtension(s), "%q", s)
+	}
+	for s := range slices.Values([]string{"", " a", "a ", "=b", "a=", "a b", "a=b c", "a=b=c", `a="b`, `"a"=b`}) {
+		require.False(t, IsChunkExtension(s), "%q", s)
+	}
+}

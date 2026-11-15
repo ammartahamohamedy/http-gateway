@@ -24,7 +24,8 @@ const (
 	// Section 2.2 asks servers to ignore at least one.
 	maxLeadingEmptyLines = 4
 
-	// maxRequestBodyBytes caps a Content-Length request body at 1 MiB.
+	// maxRequestBodyBytes caps a request body at 1 MiB: the declared
+	// Content-Length, or the decoded chunked data.
 	maxRequestBodyBytes = 1 << 20
 )
 
@@ -43,10 +44,6 @@ var (
 	// ErrTooManyLeadingEmptyLines is returned by ReadRequest when more than
 	// maxLeadingEmptyLines empty lines precede the request-line.
 	ErrTooManyLeadingEmptyLines = errors.New("http1: too many empty lines before request line")
-
-	// ErrRequestBodyTooLarge is returned by ReadRequest when Content-Length
-	// exceeds maxRequestBodyBytes.
-	ErrRequestBodyTooLarge = errors.New("http1: request body exceeds 1048576 bytes")
 )
 
 // RequestLine contains the method, request-target, and HTTP version number
@@ -60,8 +57,8 @@ type RequestLine struct {
 
 // Request holds an HTTP/1.x request-line, header fields, parsed metadata from
 // the supported fields, and the body. Body is empty without framing fields,
-// exactly Content-Length bytes with one, and nil for chunked bodies until their
-// decoder exists.
+// exactly Content-Length bytes with one, and the decoded data for chunked
+// framing.
 type Request struct {
 	RequestLine RequestLine
 	Headers     header.Headers

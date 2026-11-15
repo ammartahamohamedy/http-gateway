@@ -12,6 +12,7 @@ import (
 	"testing/iotest"
 	"time"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/body"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 	"github.com/stretchr/testify/require"
@@ -162,7 +163,7 @@ func TestReadRequestValidatesContentLength(t *testing.T) {
 		{"positive", "Content-Length: 4\r\n", []string{"4"}, nil},
 		{"mixed case and whitespace", "cOnTeNt-LeNgTh:\t 4 \t\r\n", []string{"4"}, nil},
 		{"leading zeros preserved", "Content-Length: 0004\r\n", []string{"0004"}, nil},
-		{"maximum int64 exceeds body limit", "Content-Length: 9223372036854775807\r\n", nil, ErrRequestBodyTooLarge},
+		{"maximum int64 exceeds body limit", "Content-Length: 9223372036854775807\r\n", nil, body.ErrBodyTooLarge},
 		{"empty", "Content-Length:\r\n", nil, fields.ErrInvalidContentLength},
 		{"signed", "Content-Length: +4\r\n", nil, fields.ErrInvalidContentLength},
 		{"internal whitespace", "Content-Length: 4 2\r\n", nil, fields.ErrInvalidContentLength},

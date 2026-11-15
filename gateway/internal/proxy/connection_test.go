@@ -65,6 +65,13 @@ func TestHandleConnectionReadsContentLengthBody(t *testing.T) {
 	waitForHandler(t, done)
 }
 
+func TestHandleConnectionReadsChunkedBody(t *testing.T) {
+	client, done := serve(t)
+	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"))
+	require.NoError(t, err)
+	waitForHandler(t, done)
+}
+
 func TestHandleConnectionRejectsUnsupportedExpectation(t *testing.T) {
 	client, done := serve(t)
 	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nExpect: x-custom\r\n\r\n"))
@@ -138,14 +145,20 @@ func TestReadRequestBodySendsContinue(t *testing.T) {
 	require.Equal(t, continueResponse, <-interim)
 }
 
-func TestReadRequestBodySkipsChunked(t *testing.T) {
+func TestReadRequestBodyDecodesChunked(t *testing.T) {
 	setBodyTimeout(t, 2*time.Second)
+	interim := make(chan string, 1)
 	head := "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\nExpect: 100-continue\r\n\r\n"
-	server, request := readBodyOverPipe(t, head, func(net.Conn) {})
-	// A write would block on the pipe, so returning promptly shows no 100 was sent.
+	server, request := readBodyOverPipe(t, head, func(client net.Conn) {
+		response := make([]byte, len(continueResponse))
+		_, _ = io.ReadFull(client, response)
+		interim <- string(response)
+		_, _ = client.Write([]byte("5\r\nhello\r\n0\r\n\r\n"))
+	})
 	content, err := readRequestBody(server, request)
 	require.NoError(t, err)
-	require.Nil(t, content)
+	require.Equal(t, "hello", string(content))
+	require.Equal(t, continueResponse, <-interim)
 }
 
 func TestReadRequestBodyTimesOut(t *testing.T) {

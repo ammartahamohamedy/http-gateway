@@ -13,6 +13,9 @@ var (
 	// digitsPattern matches 1*DIGIT: ASCII decimal digits, excluding signs.
 	digitsPattern = regexp.MustCompile(`\A[0-9]+\z`)
 
+	// hexDigitsPattern matches 1*HEXDIG: ASCII hexadecimal digits in either case.
+	hexDigitsPattern = regexp.MustCompile(`\A[0-9A-Fa-f]+\z`)
+
 	// qvaluePattern matches a weight's value from 0 to 1 with at most three
 	// decimal places (RFC 9110, Section 12.4.2).
 	qvaluePattern = regexp.MustCompile(`\A(?:0(?:\.[0-9]{0,3})?|1(?:\.0{0,3})?)\z`)
@@ -28,6 +31,12 @@ func IsToken(s string) bool {
 // syntax only, not numeric range.
 func IsDigits(s string) bool {
 	return digitsPattern.MatchString(s)
+}
+
+// IsHexDigits reports whether s is one or more ASCII hexadecimal digits. It
+// checks syntax only, not numeric range.
+func IsHexDigits(s string) bool {
+	return hexDigitsPattern.MatchString(s)
 }
 
 // IsQValue reports whether s is a valid weight value, such as "0.5" or "1.000".

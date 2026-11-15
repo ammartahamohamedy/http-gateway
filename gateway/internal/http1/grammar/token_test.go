@@ -26,6 +26,15 @@ func TestIsDigits(t *testing.T) {
 	}
 }
 
+func TestIsHexDigits(t *testing.T) {
+	for s := range slices.Values([]string{"0", "9", "a", "F", "0005", "DeadBeef", "ffffffffffffffffffff"}) {
+		require.True(t, IsHexDigits(s), s)
+	}
+	for s := range slices.Values([]string{"", " 1", "1 ", "+1", "-1", "0x1", "g", "٤", "1\n"}) {
+		require.False(t, IsHexDigits(s), "%q", s)
+	}
+}
+
 func TestIsQValue(t *testing.T) {
 	for s := range slices.Values([]string{"0", "0.", "0.5", "0.123", "1", "1.", "1.0", "1.000"}) {
 		require.True(t, IsQValue(s), s)

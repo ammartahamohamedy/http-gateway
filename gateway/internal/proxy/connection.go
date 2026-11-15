@@ -56,8 +56,8 @@ func HandleConnection(connection net.Conn) {
 	if err != nil {
 		// TODO: Match wrapped errors with errors.Is and respond before closing:
 		// 400 for fields.ErrInvalidTransferEncoding and fields.ErrChunkedNotFinal;
-		// 413 for http1.ErrRequestBodyTooLarge; 501 for unsupported or unknown
-		// transfer codings.
+		// 413 for body.ErrBodyTooLarge; 501 for unsupported or unknown transfer
+		// codings.
 		log.Printf("reading request: %v", err)
 		return
 	}
@@ -74,6 +74,8 @@ func HandleConnection(connection net.Conn) {
 
 	content, err := readRequestBody(connection, request)
 	if err != nil {
+		// TODO: Respond before closing: 400 for body.ErrInvalidFraming and 413
+		// for body.ErrBodyTooLarge.
 		log.Printf("reading request body: %v", err)
 		return
 	}
@@ -81,20 +83,12 @@ func HandleConnection(connection net.Conn) {
 	fmt.Printf("Method: %s\nRequest target: %s\nVersion: %s\nAuthority: %s\n",
 		request.RequestLine.Method, request.RequestLine.RequestTarget,
 		request.RequestLine.Version, request.Fields.Authority)
-	if request.Body == nil {
-		fmt.Println("Body: chunked, not decoded")
-	} else {
-		fmt.Printf("Body: %d bytes\n", len(content))
-	}
+	fmt.Printf("Body: %d bytes\n", len(content))
 }
 
 // readRequestBody buffers the whole request body within requestBodyTimeout,
-// first writing continueResponse if the client expects 100-continue. A nil body
-// reads and writes nothing.
+// first writing continueResponse if the client expects 100-continue.
 func readRequestBody(connection net.Conn, request *http1.Request) ([]byte, error) {
-	if request.Body == nil {
-		return nil, nil
-	}
 	defer func() {
 		if err := request.Body.Close(); err != nil {
 			log.Printf("closing request body: %v", err)

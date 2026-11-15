@@ -18,7 +18,8 @@ const (
 )
 
 var (
-	// ErrInvalidFraming reports inputs for which RFC 9112 defines no body length.
+	// ErrInvalidFraming reports inputs for which RFC 9112 defines no body length,
+	// or a malformed chunked body.
 	ErrInvalidFraming = errors.New("http1: message body framing is invalid")
 
 	// ErrUnsupportedFraming reports a tunnel after a 2xx response to CONNECT.

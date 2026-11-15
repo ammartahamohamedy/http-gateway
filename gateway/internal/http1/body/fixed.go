@@ -5,9 +5,6 @@ import (
 	"io"
 )
 
-// ErrBodyClosed reports a Read after Close.
-var ErrBodyClosed = errors.New("http1: read on closed body")
-
 // NewFixedReader returns a body of exactly length bytes read from source. It
 // never reads past the body, so later bytes stay in source. The final bytes are
 // returned with io.EOF; an earlier end of source returns io.ErrUnexpectedEOF

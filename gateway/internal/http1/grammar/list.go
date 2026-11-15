@@ -86,3 +86,15 @@ func IsParameter(s string) bool {
 	name, value, found := strings.Cut(s, "=")
 	return found && IsToken(name) && (IsToken(value) || IsQuotedString(value))
 }
+
+// IsChunkExtension reports whether s is one chunk extension without its ";":
+// chunk-ext-name [ BWS "=" BWS chunk-ext-val ], where the value is a token or
+// quoted-string (RFC 9112, Section 7.1.1). Whitespace around s is the caller's.
+func IsChunkExtension(s string) bool {
+	name, value, hasValue := strings.Cut(s, "=")
+	if !hasValue {
+		return IsToken(name)
+	}
+	value = strings.TrimLeft(value, " \t")
+	return IsToken(strings.TrimRight(name, " \t")) && (IsToken(value) || IsQuotedString(value))
+}

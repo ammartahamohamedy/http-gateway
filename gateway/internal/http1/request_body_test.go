@@ -9,6 +9,7 @@ import (
 	"testing"
 	"testing/iotest"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/body"
 	"github.com/stretchr/testify/require"
 )
 
@@ -58,15 +59,25 @@ func TestReadRequestAttachesBody(t *testing.T) {
 	}
 }
 
-func TestReadRequestLeavesChunkedBodyUnread(t *testing.T) {
-	const chunked = "5\r\nhello\r\n0\r\n\r\n"
-	reader := bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n" + chunked))
-	request, err := ReadRequest(reader)
-	require.NoError(t, err)
-	require.Nil(t, request.Body)
-	remaining, err := io.ReadAll(reader)
-	require.NoError(t, err)
-	require.Equal(t, chunked, string(remaining))
+func TestReadRequestDecodesChunkedBody(t *testing.T) {
+	for fragmented := range slices.Values([]bool{false, true}) {
+		t.Run("fragmented="+strconv.FormatBool(fragmented), func(t *testing.T) {
+			var source io.Reader = strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n" +
+				"5\r\nhello\r\n6;ext=1\r\n world\r\n0\r\nX-Trailer: v\r\n\r\nNEXT")
+			if fragmented {
+				source = iotest.OneByteReader(source)
+			}
+			reader := bufio.NewReader(source)
+			request, err := ReadRequest(reader)
+			require.NoError(t, err)
+			content, err := io.ReadAll(request.Body)
+			require.NoError(t, err)
+			require.Equal(t, "hello world", string(content))
+			remaining, err := io.ReadAll(reader)
+			require.NoError(t, err)
+			require.Equal(t, "NEXT", string(remaining))
+		})
+	}
 }
 
 func TestReadRequestBodyLimit(t *testing.T) {
@@ -80,8 +91,24 @@ func TestReadRequestBodyLimit(t *testing.T) {
 	require.Len(t, content, maxRequestBodyBytes)
 
 	request, err = ReadRequest(bufio.NewReader(strings.NewReader(head + strconv.Itoa(maxRequestBodyBytes+1) + "\r\n\r\n")))
-	require.ErrorIs(t, err, ErrRequestBodyTooLarge)
+	require.ErrorIs(t, err, body.ErrBodyTooLarge)
 	require.Nil(t, request)
+}
+
+func TestReadRequestChunkedBodyLimit(t *testing.T) {
+	head := "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n"
+	atLimit := strconv.FormatInt(maxRequestBodyBytes, 16) + "\r\n" + strings.Repeat("a", maxRequestBodyBytes) + "\r\n0\r\n\r\n"
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader(head + atLimit)))
+	require.NoError(t, err)
+	content, err := io.ReadAll(request.Body)
+	require.NoError(t, err)
+	require.Len(t, content, maxRequestBodyBytes)
+
+	overLimit := "1\r\na\r\n" + strconv.FormatInt(maxRequestBodyBytes, 16) + "\r\n"
+	request, err = ReadRequest(bufio.NewReader(strings.NewReader(head + overLimit)))
+	require.NoError(t, err)
+	_, err = io.ReadAll(request.Body)
+	require.ErrorIs(t, err, body.ErrBodyTooLarge)
 }
 
 func TestReadRequestTruncatedBody(t *testing.T) {

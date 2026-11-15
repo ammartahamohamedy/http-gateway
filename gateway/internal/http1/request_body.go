@@ -25,11 +25,12 @@ func requestBody(reader *bufio.Reader, line RequestLine, parsed RequestFields) (
 		return body.NewFixedReader(reader, 0), nil
 	case body.ContentLength:
 		if parsed.ContentLength > maxRequestBodyBytes {
-			return nil, ErrRequestBodyTooLarge
+			return nil, fmt.Errorf("%w: Content-Length %d exceeds %d bytes",
+				body.ErrBodyTooLarge, parsed.ContentLength, maxRequestBodyBytes)
 		}
 		return body.NewFixedReader(reader, parsed.ContentLength), nil
 	case body.Chunked:
-		return nil, nil
+		return body.NewChunkedReader(reader, maxRequestBodyBytes), nil
 	}
 	return nil, fmt.Errorf("http1: unexpected request body framing %d", mode)
 }
