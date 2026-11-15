@@ -1,4 +1,4 @@
-package lineio
+package http1
 
 import (
 	"bufio"

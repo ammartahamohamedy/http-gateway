@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/lineio"
 )
 
 // maxChunkLineBytes caps a chunk-size line, including extensions and excluding
@@ -81,7 +81,7 @@ func (chunked *chunkedReader) Read(buffer []byte) (int, error) {
 // nextChunk reads a chunk-size line. The last chunk is followed by the trailer
 // section, after which it returns io.EOF.
 func (chunked *chunkedReader) nextChunk() error {
-	line, err := lineio.ReadCRLFLine(chunked.source, maxChunkLineBytes)
+	line, err := http1.ReadCRLFLine(chunked.source, maxChunkLineBytes)
 	if err != nil {
 		return chunkLineError(err)
 	}
@@ -134,7 +134,7 @@ func chunkLineError(err error) error {
 	switch {
 	case errors.Is(err, io.EOF):
 		return io.ErrUnexpectedEOF
-	case errors.Is(err, lineio.ErrLineTooLong), errors.Is(err, lineio.ErrInvalidLineEnding):
+	case errors.Is(err, http1.ErrLineTooLong), errors.Is(err, http1.ErrInvalidLineEnding):
 		return fmt.Errorf("%w: %w", ErrInvalidFraming, err)
 	}
 

@@ -1,10 +1,6 @@
 package request
 
-import (
-	"errors"
-
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
-)
+import "github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 
 // Local request limits. They bound buffering and connection time; RFC 9112
 // sets no universal maximum for any of them.
@@ -29,13 +25,3 @@ var headerLimits = header.Limits{
 	SectionBytes: 32 * 1024,
 	Fields:       100,
 }
-
-var (
-	// ErrLineTooLong is returned by Read when request-line
-	// content, excluding CRLF, exceeds maxLineBytes.
-	ErrLineTooLong = errors.New("http1: request line exceeds 8192 bytes")
-
-	// ErrTooManyLeadingEmptyLines is returned by Read when more than
-	// maxLeadingEmptyLines empty lines precede the request-line.
-	ErrTooManyLeadingEmptyLines = errors.New("http1: too many empty lines before request line")
-)

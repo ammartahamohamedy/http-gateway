@@ -1,3 +1,6 @@
+// Package http1 holds what HTTP/1.1 request and response reading share: version
+// parsing, bounded CRLF line reading, and stage-tagged errors. It must not import
+// its subpackages, since they import it.
 package http1
 
 import (

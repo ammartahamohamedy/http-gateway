@@ -9,8 +9,8 @@ import (
 	"testing"
 	"testing/iotest"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/lineio"
 	"github.com/stretchr/testify/require"
 )
 
@@ -120,9 +120,9 @@ func TestChunkedReaderRejectsMalformedFraming(t *testing.T) {
 
 func TestChunkedReaderLineErrorsKeepCause(t *testing.T) {
 	_, _, err := decodeChunked(t, strings.NewReader("5;"+strings.Repeat("a", maxChunkLineBytes)+"\r\n"), chunkedTestLimit)
-	require.ErrorIs(t, err, lineio.ErrLineTooLong)
+	require.ErrorIs(t, err, http1.ErrLineTooLong)
 	_, _, err = decodeChunked(t, strings.NewReader("5\nhello"), chunkedTestLimit)
-	require.ErrorIs(t, err, lineio.ErrInvalidLineEnding)
+	require.ErrorIs(t, err, http1.ErrInvalidLineEnding)
 }
 
 func TestChunkedReaderRejectsMalformedTrailers(t *testing.T) {

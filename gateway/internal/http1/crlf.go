@@ -1,6 +1,4 @@
-// Package lineio reads bounded CRLF-terminated lines from a buffered reader.
-// It knows nothing about HTTP fields or messages.
-package lineio
+package http1
 
 import (
 	"bufio"

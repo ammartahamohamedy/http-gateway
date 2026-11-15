@@ -8,7 +8,16 @@ import (
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/lineio"
+)
+
+var (
+	// ErrLineTooLong is returned by Read when request-line
+	// content, excluding CRLF, exceeds maxLineBytes.
+	ErrLineTooLong = errors.New("http1: request line exceeds 8192 bytes")
+
+	// ErrTooManyLeadingEmptyLines is returned by Read when more than
+	// maxLeadingEmptyLines empty lines precede the request-line.
+	ErrTooManyLeadingEmptyLines = errors.New("http1: too many empty lines before request line")
 )
 
 // Line contains the method, request-target, and HTTP version number
@@ -25,8 +34,8 @@ type Line struct {
 // wrapped; parsing errors are returned unchanged.
 func readLine(reader *bufio.Reader) (Line, error) {
 	for range maxLeadingEmptyLines + 1 {
-		rawLine, err := lineio.ReadCRLFLine(reader, maxLineBytes)
-		if errors.Is(err, lineio.ErrLineTooLong) {
+		rawLine, err := http1.ReadCRLFLine(reader, maxLineBytes)
+		if errors.Is(err, http1.ErrLineTooLong) {
 			return Line{}, ErrLineTooLong
 		}
 		if err != nil {
