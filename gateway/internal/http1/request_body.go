@@ -12,7 +12,8 @@ import (
 )
 
 // requestBody returns the body reader for request's framing, reading from
-// reader. A chunked body sets request.Trailers when it ends.
+// reader. A chunked body has its other transfer codings decoded and sets
+// request.Trailers when it ends.
 func requestBody(reader *bufio.Reader, request *Request) (io.ReadCloser, error) {
 	parsed := request.Fields
 	mode, err := body.Framing(body.Message{
@@ -34,9 +35,11 @@ func requestBody(reader *bufio.Reader, request *Request) (io.ReadCloser, error) 
 		}
 		return body.NewFixedReader(reader, parsed.ContentLength), nil
 	case body.Chunked:
-		return body.NewChunkedReader(reader, maxRequestBodyBytes, func(trailers header.Headers) {
+		chunked := body.NewChunkedReader(reader, maxRequestBodyBytes, func(trailers header.Headers) {
 			request.Trailers = allowedTrailers(trailers)
-		}), nil
+		})
+		codings := parsed.TransferCodings[:len(parsed.TransferCodings)-1]
+		return body.Decode(chunked, codings, maxRequestBodyBytes), nil
 	}
 	return nil, fmt.Errorf("http1: unexpected request body framing %d", mode)
 }

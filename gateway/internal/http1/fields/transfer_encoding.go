@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/body"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
 )
 
@@ -27,10 +28,6 @@ var transferCodingAliases = map[string]string{
 	"x-compress": "compress",
 	"x-gzip":     "gzip",
 }
-
-// supportedTransferCodings lists the accepted transfer codings. "deflate" is the
-// zlib format (RFC 9110, Section 8.4.1.2).
-var supportedTransferCodings = []string{"chunked", "gzip", "deflate"}
 
 var (
 	// ErrInvalidTransferEncoding reports a malformed list, or chunked with
@@ -97,12 +94,13 @@ func ValidateRequestTransferCodings(codings []string) error {
 }
 
 // CheckTransferCodingSupport checks the lowercase names from ParseTransferEncoding
-// after framing validation against supportedTransferCodings. The first other
-// name returns ErrUnsupportedTransferCoding if listed in the IANA registry, or
+// after framing validation: chunked, which framing removes, and codings that
+// body.CanDecode reports are supported. The first other name returns
+// ErrUnsupportedTransferCoding if listed in the IANA registry, or
 // ErrUnknownTransferCoding otherwise. It reads no body data.
 func CheckTransferCodingSupport(codings []string) error {
 	for coding := range slices.Values(codings) {
-		if slices.Contains(supportedTransferCodings, coding) {
+		if coding == "chunked" || body.CanDecode(coding) {
 			continue
 		}
 		if slices.Contains(ianaTransferCodingNames, coding) {

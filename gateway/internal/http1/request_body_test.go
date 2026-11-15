@@ -2,6 +2,8 @@ package http1
 
 import (
 	"bufio"
+	"bytes"
+	"compress/gzip"
 	"io"
 	"slices"
 	"strconv"
@@ -159,4 +161,42 @@ func TestAllowedTrailersKeepsInput(t *testing.T) {
 	require.Equal(t, header.Headers{"x-checksum": {"abc"}}, allowedTrailers(trailers))
 	require.Equal(t, header.Headers{"x-checksum": {"abc"}, "host": {"evil.example"}}, trailers)
 	require.Nil(t, allowedTrailers(nil))
+}
+
+func TestReadRequestDecodesGzipTransferCoding(t *testing.T) {
+	var encoded bytes.Buffer
+	writer := gzip.NewWriter(&encoded)
+	_, err := writer.Write([]byte("hello world"))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	chunks := strconv.FormatInt(int64(encoded.Len()), 16) + "\r\n" + encoded.String() + "\r\n0\r\nX-Checksum: abc\r\n\r\n"
+
+	for coding := range slices.Values([]string{"gzip", "x-gzip"}) {
+		t.Run(coding, func(t *testing.T) {
+			reader := bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: " +
+				coding + ", chunked\r\n\r\n" + chunks + "NEXT"))
+			request, err := ReadRequest(reader)
+			require.NoError(t, err)
+			content, err := io.ReadAll(request.Body)
+			require.NoError(t, err)
+			require.Equal(t, "hello world", string(content))
+			require.Equal(t, header.Headers{"x-checksum": {"abc"}}, request.Trailers)
+			remaining, err := io.ReadAll(reader)
+			require.NoError(t, err)
+			require.Equal(t, "NEXT", string(remaining))
+		})
+	}
+}
+
+func TestReadRequestLimitsDecodedBody(t *testing.T) {
+	var encoded bytes.Buffer
+	writer := gzip.NewWriter(&encoded)
+	_, err := writer.Write(make([]byte, 2*maxRequestBodyBytes))
+	require.NoError(t, err)
+	require.NoError(t, writer.Close())
+	chunks := strconv.FormatInt(int64(encoded.Len()), 16) + "\r\n" + encoded.String() + "\r\n0\r\n\r\n"
+	request, err := ReadRequest(bufio.NewReader(strings.NewReader("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: gzip, chunked\r\n\r\n" + chunks)))
+	require.NoError(t, err)
+	_, err = io.ReadAll(request.Body)
+	require.ErrorIs(t, err, body.ErrBodyTooLarge)
 }
