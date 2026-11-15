@@ -60,7 +60,7 @@ func HandleConnection(connection net.Conn) {
 		// TODO: Match wrapped errors with errors.Is and respond before closing:
 		// 400 for fields.ErrInvalidTransferEncoding and fields.ErrChunkedNotFinal;
 		// 413 for body.ErrBodyTooLarge; 501 for unsupported or unknown transfer
-		// codings.
+		// codings; otherwise choose by the http1.StageError stage.
 		log.Printf("reading request: %v", err)
 		return
 	}
