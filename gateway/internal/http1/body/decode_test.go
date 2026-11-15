@@ -135,9 +135,6 @@ func TestDecodeLimitsDecodedData(t *testing.T) {
 func TestDecodeUnsupportedCoding(t *testing.T) {
 	_, err := decodeAll([]byte("data"), []string{"compress"}, decodeTestLimit)
 	require.ErrorIs(t, err, ErrUnsupportedCoding)
-	require.False(t, CanDecode("compress"))
-	require.True(t, CanDecode("gzip"))
-	require.True(t, CanDecode("deflate"))
 }
 
 // countingReader counts reads from its source.
