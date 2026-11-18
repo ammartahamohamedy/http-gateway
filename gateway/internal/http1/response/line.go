@@ -10,10 +10,6 @@ import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
 )
 
-// maxLineBytes caps status-line content, excluding CRLF, at 8 KiB, matching the
-// request-line limit. RFC 9112 sets no maximum.
-const maxLineBytes = 8 * 1024
-
 // errLineTooLong is returned by readLine when status-line content, excluding
 // CRLF, exceeds maxLineBytes.
 var errLineTooLong = errors.New("http1: status line exceeds 8192 bytes")

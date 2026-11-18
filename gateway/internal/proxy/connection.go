@@ -20,7 +20,7 @@ var requestHeadTimeout = 10 * time.Second
 // (readRequestBody), and prints the request if accepted. It attempts to close
 // the connection before returning. Deadline, read, validation, policy, and
 // close errors are logged without terminating the listener. Apart from 100
-// (Continue), no response is sent, and nothing is forwarded yet.
+// (Continue), no response is sent, and nothing is forwarded.
 func HandleConnection(connection net.Conn) {
 	defer func() {
 		if err := connection.Close(); err != nil {
@@ -40,10 +40,6 @@ func HandleConnection(connection net.Conn) {
 		err = fields.CheckTransferCodingSupport(message.Fields.TransferCodings)
 	}
 	if err != nil {
-		// TODO: Match wrapped errors with errors.Is and respond before closing:
-		// 400 for fields.ErrInvalidTransferEncoding and fields.ErrChunkedNotFinal;
-		// 413 for body.ErrBodyTooLarge; 501 for unsupported or unknown transfer
-		// codings; otherwise choose by the http1.StageError stage.
 		log.Printf("reading request: %v", err)
 		return
 	}
@@ -54,15 +50,12 @@ func HandleConnection(connection net.Conn) {
 	}
 
 	if err := fields.CheckExpectationSupport(message.Fields.Expectations); err != nil {
-		// TODO: Respond 417 before closing.
 		log.Printf("rejecting request: %v", err)
 		return
 	}
 
 	content, err := readRequestBody(connection, message)
 	if err != nil {
-		// TODO: Respond before closing: 400 for body.ErrInvalidFraming and 413
-		// for body.ErrBodyTooLarge.
 		log.Printf("reading request body: %v", err)
 		return
 	}
