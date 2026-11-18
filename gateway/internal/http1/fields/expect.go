@@ -87,17 +87,18 @@ func parseExpectation(member string) (string, bool) {
 		return "", false
 	}
 
-	head := grammar.TrimOWS(parts[0])
-	name, value, hasValue := strings.Cut(head, "=")
+	headParts := strings.SplitN(grammar.TrimOWS(parts[0]), "=", 2)
+	name := headParts[0]
 	if !grammar.IsToken(name) {
 		return "", false
 	}
 
 	parameters := parts[1:]
-	if !hasValue {
+	if len(headParts) == 1 {
 		return strings.ToLower(name), len(parameters) == 0
 	}
 
+	value := headParts[1]
 	if !grammar.IsToken(value) && !grammar.IsQuotedString(value) {
 		return "", false
 	}

@@ -36,8 +36,8 @@ func ValidateContentType(values []string) error {
 		return ErrInvalidContentType
 	}
 
-	mediaType, subtype, found := strings.Cut(grammar.TrimOWS(parts[0]), "/")
-	if !found || !grammar.IsToken(mediaType) || !grammar.IsToken(subtype) {
+	typeParts := strings.Split(grammar.TrimOWS(parts[0]), "/")
+	if len(typeParts) != 2 || !grammar.IsToken(typeParts[0]) || !grammar.IsToken(typeParts[1]) {
 		return ErrInvalidContentType
 	}
 
@@ -106,10 +106,11 @@ func isAcceptMember(member string) bool {
 // isMediaRange reports whether text is */*, type/*, or type/subtype. A "*" is a
 // valid token, so */subtype needs its own rejection.
 func isMediaRange(text string) bool {
-	mediaType, subtype, found := strings.Cut(text, "/")
-	if !found || !grammar.IsToken(mediaType) || !grammar.IsToken(subtype) {
+	parts := strings.Split(text, "/")
+	if len(parts) != 2 || !grammar.IsToken(parts[0]) || !grammar.IsToken(parts[1]) {
 		return false
 	}
 
+	mediaType, subtype := parts[0], parts[1]
 	return mediaType != "*" || subtype == "*"
 }

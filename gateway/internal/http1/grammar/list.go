@@ -90,8 +90,8 @@ func IsQuotedString(text string) bool {
 // token "=" ( token / quoted-string ), with no whitespace around "=" (Section
 // 5.6.6). Fields that allow bad whitespace there check it themselves.
 func IsParameter(text string) bool {
-	name, value, found := strings.Cut(text, "=")
-	return found && IsToken(name) && (IsToken(value) || IsQuotedString(value))
+	parts := strings.SplitN(text, "=", 2)
+	return len(parts) == 2 && IsToken(parts[0]) && (IsToken(parts[1]) || IsQuotedString(parts[1]))
 }
 
 // IsChunkExtension reports whether text is one chunk extension without its ";":
@@ -99,11 +99,11 @@ func IsParameter(text string) bool {
 // quoted-string (RFC 9112, Section 7.1.1). Whitespace around text is the
 // caller's.
 func IsChunkExtension(text string) bool {
-	name, value, hasValue := strings.Cut(text, "=")
-	if !hasValue {
-		return IsToken(name)
+	parts := strings.SplitN(text, "=", 2)
+	if len(parts) == 1 {
+		return IsToken(parts[0])
 	}
 
-	value = strings.TrimLeft(value, " \t")
-	return IsToken(strings.TrimRight(name, " \t")) && (IsToken(value) || IsQuotedString(value))
+	value := strings.TrimLeft(parts[1], " \t")
+	return IsToken(strings.TrimRight(parts[0], " \t")) && (IsToken(value) || IsQuotedString(value))
 }

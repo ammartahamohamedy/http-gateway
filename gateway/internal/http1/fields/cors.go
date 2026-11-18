@@ -46,10 +46,12 @@ func ParseOrigin(values []string) (string, error) {
 		return origin, nil
 	}
 
-	scheme, authority, found := strings.Cut(origin, "://")
-	if !found || !originSchemePattern.MatchString(scheme) {
+	parts := strings.Split(origin, "://")
+	if len(parts) != 2 || !originSchemePattern.MatchString(parts[0]) {
 		return "", ErrInvalidOrigin
 	}
+
+	authority := parts[1]
 
 	if authority == "" || authority[0] == ':' || validateHostValue(authority) != nil {
 		return "", ErrInvalidOrigin

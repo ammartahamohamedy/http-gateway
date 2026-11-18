@@ -12,10 +12,12 @@ import (
 // generic syntax, not field-specific semantics, and does not enforce size limits.
 // On error, both returned strings are empty.
 func parseField(rawLine string) (name, value string, err error) {
-	name, value, found := strings.Cut(rawLine, ":")
-	if !found {
+	parts := strings.SplitN(rawLine, ":", 2)
+	if len(parts) != 2 {
 		return "", "", errors.New("http1: header field is missing a colon")
 	}
+
+	name, value = parts[0], parts[1]
 
 	if !grammar.IsToken(name) {
 		return "", "", errors.New("http1: invalid header field name")

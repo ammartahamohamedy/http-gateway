@@ -63,15 +63,16 @@ func ValidateAcceptEncoding(values []string) error {
 // isAcceptEncodingMember reports whether member is a coding token, optionally
 // followed by one ";" and a weight.
 func isAcceptEncodingMember(member string) bool {
-	coding, weight, weighted := strings.Cut(member, ";")
-	if !grammar.IsToken(grammar.TrimOWS(coding)) {
+	parts := strings.Split(member, ";")
+	if len(parts) > 2 || !grammar.IsToken(grammar.TrimOWS(parts[0])) {
 		return false
 	}
 
-	if !weighted {
+	if len(parts) == 1 {
 		return true
 	}
 
-	name, qvalue, found := strings.Cut(grammar.TrimOWS(weight), "=")
-	return found && (name == "q" || name == "Q") && grammar.IsQValue(qvalue)
+	weightParts := strings.Split(grammar.TrimOWS(parts[1]), "=")
+	return len(weightParts) == 2 && (weightParts[0] == "q" || weightParts[0] == "Q") &&
+		grammar.IsQValue(weightParts[1])
 }

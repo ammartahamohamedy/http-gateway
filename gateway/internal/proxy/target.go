@@ -83,7 +83,7 @@ func checkPort(authority string) error {
 // checkPath rejects a path beginning with "//" and any "." or ".." segment,
 // comparing %2E escapes without regard to case. The query is not inspected.
 func checkPath(path string) error {
-	path, _, _ = strings.Cut(path, "?")
+	path = strings.SplitN(path, "?", 2)[0]
 	if strings.HasPrefix(path, "//") {
 		return ErrAmbiguousPath
 	}

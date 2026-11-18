@@ -154,11 +154,11 @@ func parseTransferCoding(member string) (string, bool) {
 // transfer-parameter is token BWS "=" BWS ( token / quoted-string ) (RFC 9110,
 // Section 10.1.4).
 func isTransferParameter(text string) bool {
-	name, value, found := strings.Cut(text, "=")
-	if !found || !grammar.IsToken(grammar.TrimOWS(name)) {
+	parts := strings.SplitN(text, "=", 2)
+	if len(parts) != 2 || !grammar.IsToken(grammar.TrimOWS(parts[0])) {
 		return false
 	}
 
-	value = grammar.TrimOWS(value)
+	value := grammar.TrimOWS(parts[1])
 	return grammar.IsToken(value) || grammar.IsQuotedString(value)
 }
