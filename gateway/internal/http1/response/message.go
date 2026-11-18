@@ -1,4 +1,4 @@
-// Package response holds HTTP/1.1 response messages.
+// Package response reads and validates HTTP/1.1 response messages.
 package response
 
 import (
@@ -7,19 +7,10 @@ import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 )
 
-// StatusLine contains the HTTP version number, numeric status code, and
-// optional reason phrase from a response's start-line.
-type StatusLine struct {
-	// Version is the numeric protocol version, such as "1.1".
-	Version      string
-	StatusCode   int
-	ReasonPhrase string
-}
-
 // Message holds an HTTP/1.x status-line, header fields, and an optional body
 // stream. The type itself does not parse or validate these fields.
 type Message struct {
-	StatusLine StatusLine
-	Headers    header.Section
-	Body       io.ReadCloser
+	Line    Line
+	Headers header.Section
+	Body    io.ReadCloser
 }
