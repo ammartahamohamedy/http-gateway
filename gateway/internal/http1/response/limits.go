@@ -11,6 +11,10 @@ const (
 	// maxInterimResponses caps the interim (1xx) responses accepted before the
 	// final response, so a server cannot delay it indefinitely.
 	maxInterimResponses = 5
+
+	// maxBodyBytes caps a response body at 1 MiB: the declared Content-Length,
+	// or the data read or decoded.
+	maxBodyBytes = 1 << 20
 )
 
 // headerLimits are the local limits for each response header section, interim

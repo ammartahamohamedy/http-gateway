@@ -29,17 +29,17 @@ func gzipBytes(t *testing.T, data []byte) []byte {
 
 // framedBytes returns data as a framed body that never reads past its end.
 func framedBytes(data []byte) io.ReadCloser {
-	return NewFixedReader(bytes.NewReader(data), int64(len(data)))
+	return newFixedReader(bytes.NewReader(data), int64(len(data)))
 }
 
 func decodeAll(encoded []byte, codings []string, limit int64) (string, error) {
-	content, err := io.ReadAll(Decode(framedBytes(encoded), codings, limit))
+	content, err := io.ReadAll(decode(framedBytes(encoded), codings, limit))
 	return string(content), err
 }
 
 func TestDecodeWithoutCodingsReturnsFramed(t *testing.T) {
 	framed := framedBytes([]byte("hello"))
-	require.Same(t, framed, Decode(framed, nil, decodeTestLimit))
+	require.Same(t, framed, decode(framed, nil, decodeTestLimit))
 }
 
 func TestDecodeGzip(t *testing.T) {
@@ -54,8 +54,8 @@ func TestDecodeGzip(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			framed := NewFixedReader(test.source(), int64(len(encoded)))
-			content, err := io.ReadAll(Decode(framed, []string{"gzip"}, decodeTestLimit))
+			framed := newFixedReader(test.source(), int64(len(encoded)))
+			content, err := io.ReadAll(decode(framed, []string{"gzip"}, decodeTestLimit))
 			require.NoError(t, err)
 			require.Equal(t, "hello world", string(content))
 		})
@@ -111,8 +111,8 @@ func TestDecodeTruncatedGzip(t *testing.T) {
 		require.NotErrorIs(t, err, io.ErrUnexpectedEOF, "cut at %d", cut)
 
 		// A body cut by the connection is incomplete.
-		framed := NewFixedReader(bytes.NewReader(encoded[:cut]), int64(len(encoded)))
-		_, err = io.ReadAll(Decode(framed, []string{"gzip"}, decodeTestLimit))
+		framed := newFixedReader(bytes.NewReader(encoded[:cut]), int64(len(encoded)))
+		_, err = io.ReadAll(decode(framed, []string{"gzip"}, decodeTestLimit))
 		require.ErrorIs(t, err, io.ErrUnexpectedEOF, "cut at %d", cut)
 		require.NotErrorIs(t, err, ErrInvalidCoding, "cut at %d", cut)
 	}
@@ -153,8 +153,8 @@ func (counting *countingReader) Read(buffer []byte) (int, error) {
 func TestDecodeIsLazy(t *testing.T) {
 	encoded := gzipBytes(t, []byte("hello"))
 	source := &countingReader{source: bytes.NewReader(encoded)}
-	decoded := Decode(NewFixedReader(source, int64(len(encoded))), []string{"gzip"}, decodeTestLimit)
-	require.Zero(t, source.reads, "Decode must not read")
+	decoded := decode(newFixedReader(source, int64(len(encoded))), []string{"gzip"}, decodeTestLimit)
+	require.Zero(t, source.reads, "decode must not read")
 	content, err := io.ReadAll(decoded)
 	require.NoError(t, err)
 	require.Equal(t, "hello", string(content))
@@ -165,13 +165,13 @@ func TestDecodePassesSourceErrors(t *testing.T) {
 	errSource := errors.New("connection reset")
 	encoded := gzipBytes(t, []byte(strings.Repeat("hello world ", 100)))
 	source := io.MultiReader(bytes.NewReader(encoded[:20]), iotest.ErrReader(errSource))
-	_, err := io.ReadAll(Decode(NewFixedReader(source, int64(len(encoded))), []string{"gzip"}, decodeTestLimit))
+	_, err := io.ReadAll(decode(newFixedReader(source, int64(len(encoded))), []string{"gzip"}, decodeTestLimit))
 	require.ErrorIs(t, err, errSource)
 	require.NotErrorIs(t, err, ErrInvalidCoding)
 }
 
 func TestDecodeErrorsAreSticky(t *testing.T) {
-	decoded := Decode(framedBytes([]byte("not gzip")), []string{"gzip"}, decodeTestLimit)
+	decoded := decode(framedBytes([]byte("not gzip")), []string{"gzip"}, decodeTestLimit)
 	for range 2 {
 		_, err := decoded.Read(make([]byte, 8))
 		require.ErrorIs(t, err, ErrInvalidCoding)
@@ -191,7 +191,7 @@ func (recorder *closeRecorder) Close() error {
 
 func TestDecodeClose(t *testing.T) {
 	framed := &closeRecorder{Reader: bytes.NewReader(gzipBytes(t, []byte("hello")))}
-	decoded := Decode(framed, []string{"gzip"}, decodeTestLimit)
+	decoded := decode(framed, []string{"gzip"}, decodeTestLimit)
 	require.NoError(t, decoded.Close())
 	require.True(t, framed.closed)
 	_, err := decoded.Read(make([]byte, 5))
@@ -215,7 +215,7 @@ func TestDecodeDeflate(t *testing.T) {
 		if fragmented {
 			source = iotest.OneByteReader(source)
 		}
-		content, err := io.ReadAll(Decode(NewFixedReader(source, int64(len(encoded))), []string{"deflate"}, decodeTestLimit))
+		content, err := io.ReadAll(decode(newFixedReader(source, int64(len(encoded))), []string{"deflate"}, decodeTestLimit))
 		require.NoError(t, err, "fragmented=%v", fragmented)
 		require.Equal(t, "hello world", string(content))
 	}
@@ -266,8 +266,8 @@ func TestDecodeRejectsMalformedDeflate(t *testing.T) {
 
 func TestDecodeDeflateIncompleteBody(t *testing.T) {
 	encoded := zlibBytes(t, []byte(strings.Repeat("hello world ", 100)))
-	framed := NewFixedReader(bytes.NewReader(encoded[:len(encoded)/2]), int64(len(encoded)))
-	_, err := io.ReadAll(Decode(framed, []string{"deflate"}, decodeTestLimit))
+	framed := newFixedReader(bytes.NewReader(encoded[:len(encoded)/2]), int64(len(encoded)))
+	_, err := io.ReadAll(decode(framed, []string{"deflate"}, decodeTestLimit))
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 }
 
@@ -281,7 +281,7 @@ func TestDecodePassesSourceErrorAfterStream(t *testing.T) {
 	errSource := errors.New("connection reset")
 	encoded := zlibBytes(t, []byte("hello"))
 	source := io.MultiReader(bytes.NewReader(encoded), iotest.ErrReader(errSource))
-	framed := NewFixedReader(source, int64(len(encoded))+10)
-	_, err := io.ReadAll(Decode(framed, []string{"deflate"}, decodeTestLimit))
+	framed := newFixedReader(source, int64(len(encoded))+10)
+	_, err := io.ReadAll(decode(framed, []string{"deflate"}, decodeTestLimit))
 	require.ErrorIs(t, err, errSource)
 }

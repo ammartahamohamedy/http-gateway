@@ -3,10 +3,12 @@ package fields
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/grammar"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 )
 
 var (
@@ -61,6 +63,21 @@ func ValidateTrailerNames(names []string) error {
 	}
 
 	return nil
+}
+
+// AllowedTrailers returns the trailer fields that IsAllowedTrailer permits, or
+// nil when none remain. The input is not changed.
+func AllowedTrailers(trailers header.Section) header.Section {
+	allowed := maps.Clone(trailers)
+	maps.DeleteFunc(allowed, func(name string, _ []string) bool {
+		return !IsAllowedTrailer(name)
+	})
+
+	if len(allowed) == 0 {
+		return nil
+	}
+
+	return allowed
 }
 
 // IsAllowedTrailer reports whether a field may be processed as a trailer,

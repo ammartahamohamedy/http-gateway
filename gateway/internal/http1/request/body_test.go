@@ -159,13 +159,6 @@ func TestReadContentLengthBodyHasNoTrailers(t *testing.T) {
 	require.Nil(t, request.Trailers)
 }
 
-func TestAllowedTrailersKeepsInput(t *testing.T) {
-	trailers := header.Section{"x-checksum": {"abc"}, "host": {"evil.example"}}
-	require.Equal(t, header.Section{"x-checksum": {"abc"}}, allowedTrailers(trailers))
-	require.Equal(t, header.Section{"x-checksum": {"abc"}, "host": {"evil.example"}}, trailers)
-	require.Nil(t, allowedTrailers(nil))
-}
-
 func TestReadDecodesGzipTransferCoding(t *testing.T) {
 	var encoded bytes.Buffer
 	writer := gzip.NewWriter(&encoded)

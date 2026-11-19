@@ -24,15 +24,16 @@ var trailerLimits = header.Limits{
 	Fields:       100,
 }
 
-// NewChunkedReader returns the decoded data of a chunked body read from source
+// newChunkedReader returns the decoded data of a chunked body read from source
 // (RFC 9112, Section 7.1). It never reads past the body, so later bytes stay in
 // source. Chunk extensions are checked and ignored. The trailer section is read
 // within trailerLimits and passed to onTrailers before io.EOF is returned, or
 // discarded when onTrailers is nil (RFC 9110, Section 6.5.1). Decoded data over
-// maxBytes returns ErrBodyTooLarge; a negative maxBytes is treated as zero. Malformed framing returns ErrInvalidFraming, and an early end of source
+// maxBytes returns ErrBodyTooLarge; a negative maxBytes is treated as zero.
+// Malformed framing returns ErrInvalidFraming, and an early end of source
 // returns io.ErrUnexpectedEOF. Errors are sticky. Close stops further reads
 // without closing or draining source.
-func NewChunkedReader(source *bufio.Reader, maxBytes int64, onTrailers func(header.Section)) io.ReadCloser {
+func newChunkedReader(source *bufio.Reader, maxBytes int64, onTrailers func(header.Section)) io.ReadCloser {
 	return &chunkedReader{source: source, allowance: max(maxBytes, 0), onTrailers: onTrailers}
 }
 

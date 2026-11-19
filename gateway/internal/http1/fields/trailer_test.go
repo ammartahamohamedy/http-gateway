@@ -4,6 +4,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 	"github.com/stretchr/testify/require"
 )
 
@@ -63,4 +64,17 @@ func TestIsAllowedTrailer(t *testing.T) {
 	for name := range slices.Values([]string{"Content-Length", "TRANSFER-ENCODING", "host", "Trailer", "Authorization", "Content-Type"}) {
 		require.False(t, IsAllowedTrailer(name), name)
 	}
+}
+
+func TestAllowedTrailers(t *testing.T) {
+	trailers := header.Section{"x-checksum": {"abc"}, "host": {"evil.example"}, "Server-Timing": {"db;dur=5"}}
+
+	require.Equal(t, header.Section{"x-checksum": {"abc"}, "Server-Timing": {"db;dur=5"}}, AllowedTrailers(trailers))
+	require.Equal(t, header.Section{"x-checksum": {"abc"}, "host": {"evil.example"}, "Server-Timing": {"db;dur=5"}}, trailers)
+}
+
+func TestAllowedTrailersReturnsNilWhenNoneRemain(t *testing.T) {
+	require.Nil(t, AllowedTrailers(nil))
+	require.Nil(t, AllowedTrailers(header.Section{}))
+	require.Nil(t, AllowedTrailers(header.Section{"content-length": {"5"}, "host": {"a"}}))
 }

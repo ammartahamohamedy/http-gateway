@@ -19,7 +19,7 @@ const chunkedTestLimit = 1 << 20
 func decodeChunked(t *testing.T, source io.Reader, limit int64) (string, string, error) {
 	t.Helper()
 	reader := bufio.NewReaderSize(source, 16)
-	content, err := io.ReadAll(NewChunkedReader(reader, limit, nil))
+	content, err := io.ReadAll(newChunkedReader(reader, limit, nil))
 	remaining, remainingErr := io.ReadAll(reader)
 	require.NoError(t, remainingErr)
 	return string(content), string(remaining), err
@@ -68,7 +68,7 @@ func TestChunkedReaderDecodes(t *testing.T) {
 }
 
 func TestChunkedReaderSmallBuffer(t *testing.T) {
-	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n")), chunkedTestLimit, nil)
+	reader := newChunkedReader(bufio.NewReader(strings.NewReader("5\r\nhello\r\n6\r\n world\r\n0\r\n\r\n")), chunkedTestLimit, nil)
 	buffer := make([]byte, 2)
 	var content []byte
 	for {
@@ -188,7 +188,7 @@ func TestChunkedReaderLimit(t *testing.T) {
 }
 
 func TestChunkedReaderErrorsAreSticky(t *testing.T) {
-	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("g\r\n5\r\nhello\r\n0\r\n\r\n")), chunkedTestLimit, nil)
+	reader := newChunkedReader(bufio.NewReader(strings.NewReader("g\r\n5\r\nhello\r\n0\r\n\r\n")), chunkedTestLimit, nil)
 	for range 2 {
 		count, err := reader.Read(make([]byte, 8))
 		require.Zero(t, count)
@@ -199,7 +199,7 @@ func TestChunkedReaderErrorsAreSticky(t *testing.T) {
 func TestChunkedReaderPropagatesSourceErrors(t *testing.T) {
 	errSource := errors.New("connection reset")
 	source := io.MultiReader(strings.NewReader("5\r\nhe"), iotest.ErrReader(errSource))
-	content, err := io.ReadAll(NewChunkedReader(bufio.NewReader(source), chunkedTestLimit, nil))
+	content, err := io.ReadAll(newChunkedReader(bufio.NewReader(source), chunkedTestLimit, nil))
 	require.ErrorIs(t, err, errSource)
 	require.Equal(t, "he", string(content))
 }
@@ -207,7 +207,7 @@ func TestChunkedReaderPropagatesSourceErrors(t *testing.T) {
 func TestChunkedReaderClose(t *testing.T) {
 	const wire = "5\r\nhello\r\n0\r\n\r\n"
 	source := bufio.NewReader(strings.NewReader(wire))
-	reader := NewChunkedReader(source, chunkedTestLimit, nil)
+	reader := newChunkedReader(source, chunkedTestLimit, nil)
 	require.NoError(t, reader.Close())
 	count, err := reader.Read(make([]byte, 5))
 	require.Zero(t, count)
@@ -232,7 +232,7 @@ func TestChunkedReaderPassesTrailers(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			calls := 0
 			var got header.Section
-			reader := NewChunkedReader(bufio.NewReader(strings.NewReader(test.wire)), chunkedTestLimit, func(trailers header.Section) {
+			reader := newChunkedReader(bufio.NewReader(strings.NewReader(test.wire)), chunkedTestLimit, func(trailers header.Section) {
 				calls++
 				got = trailers
 			})
@@ -250,7 +250,7 @@ func TestChunkedReaderPassesTrailers(t *testing.T) {
 
 func TestChunkedReaderSkipsCallbackOnError(t *testing.T) {
 	called := false
-	reader := NewChunkedReader(bufio.NewReader(strings.NewReader("0\r\nno colon\r\n\r\n")), chunkedTestLimit, func(header.Section) { called = true })
+	reader := newChunkedReader(bufio.NewReader(strings.NewReader("0\r\nno colon\r\n\r\n")), chunkedTestLimit, func(header.Section) { called = true })
 	_, err := io.ReadAll(reader)
 	require.Error(t, err)
 	require.False(t, called)

@@ -37,5 +37,10 @@ func Read(reader *bufio.Reader, requestMethod string, onInterim func(*Message) e
 		return nil, &http1.StageError{Stage: http1.StageFields, Err: err}
 	}
 
+	// Body stage: decide framing and attach a body reader over the same reader.
+	if message.Body, err = messageBody(reader, requestMethod, &message); err != nil {
+		return nil, &http1.StageError{Stage: http1.StageBody, Err: err}
+	}
+
 	return &message, nil
 }

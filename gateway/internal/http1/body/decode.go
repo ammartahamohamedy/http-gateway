@@ -18,16 +18,16 @@ var (
 	ErrUnsupportedCoding = errors.New("http1: transfer coding has no decoder")
 )
 
-// Decode returns framed with codings removed. Codings are listed in the order
+// decode returns framed with codings removed. Codings are listed in the order
 // they were applied, as in Transfer-Encoding without its final chunked, so they
-// are decoded in reverse. Each decoder is created on the first Read, so Decode
+// are decoded in reverse. Each decoder is created on the first Read, so decode
 // reads nothing. Decoded data over maxBytes returns ErrBodyTooLarge; a negative
 // maxBytes is treated as zero. Malformed, truncated, or trailing encoded data
 // within a complete body returns ErrInvalidCoding, a coding without a decoder
 // returns ErrUnsupportedCoding, and errors from framed, such as
 // io.ErrUnexpectedEOF for an incomplete body, pass through. Errors are sticky.
 // Close closes framed. Without codings, framed is returned unchanged.
-func Decode(framed io.ReadCloser, codings []string, maxBytes int64) io.ReadCloser {
+func decode(framed io.ReadCloser, codings []string, maxBytes int64) io.ReadCloser {
 	if len(codings) == 0 {
 		return framed
 	}

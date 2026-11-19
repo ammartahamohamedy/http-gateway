@@ -5,12 +5,12 @@ import (
 	"io"
 )
 
-// NewFixedReader returns a body of exactly length bytes read from source. It
+// newFixedReader returns a body of exactly length bytes read from source. It
 // never reads past the body, so later bytes stay in source. The final bytes are
 // returned with io.EOF; an earlier end of source returns io.ErrUnexpectedEOF
 // (RFC 9112, Section 8). A negative length is treated as zero. Close stops
 // further reads without closing or draining source.
-func NewFixedReader(source io.Reader, length int64) io.ReadCloser {
+func newFixedReader(source io.Reader, length int64) io.ReadCloser {
 	return &fixedReader{limited: io.LimitedReader{R: source, N: max(length, 0)}}
 }
 
