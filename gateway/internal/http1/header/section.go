@@ -1,5 +1,5 @@
-// Package header reads and parses an HTTP/1.1 field section. It checks generic
-// field syntax and caller-supplied limits, not field-specific semantics.
+// Package header reads, parses, and writes an HTTP/1.1 field section. It checks
+// generic field syntax and caller-supplied limits, not field-specific semantics.
 package header
 
 import "strings"
