@@ -54,8 +54,7 @@ func CanDecode(coding string) bool {
 // decoder's formatErrors, or a flate.CorruptInputError, which gzip and zlib
 // both return.
 func (decoder codingDecoder) isFormatError(err error) bool {
-	var corrupt flate.CorruptInputError
-	if errors.As(err, &corrupt) {
+	if _, ok := errors.AsType[flate.CorruptInputError](err); ok {
 		return true
 	}
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 )
 
 var (
@@ -32,9 +33,9 @@ func Decode(framed io.ReadCloser, codings []string, maxBytes int64) io.ReadClose
 	}
 
 	var reader io.Reader = framed
-	for index := len(codings) - 1; index >= 0; index-- {
+	for _, coding := range slices.Backward(codings) {
 		input := &endTracker{source: reader}
-		reader = &decodedReader{coding: codings[index], input: input, source: bufio.NewReader(input)}
+		reader = &decodedReader{coding: coding, input: input, source: bufio.NewReader(input)}
 	}
 
 	return newLimitedBody(reader, framed, maxBytes)

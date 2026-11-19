@@ -70,7 +70,7 @@ func TestParseFieldRejectsMalformedInput(t *testing.T) {
 }
 
 func TestParseFieldValueBytes(t *testing.T) {
-	for octet := 0; octet <= 255; octet++ {
+	for octet := range 256 {
 		t.Run(fmt.Sprintf("0x%02X", octet), func(t *testing.T) {
 			value := "a" + string([]byte{byte(octet)}) + "z"
 			name, gotValue, err := parseField("X-Test: " + value)

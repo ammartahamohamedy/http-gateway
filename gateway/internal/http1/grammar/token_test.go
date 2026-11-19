@@ -49,7 +49,7 @@ func TestIsQValue(t *testing.T) {
 }
 
 func TestIsFieldValueBytes(t *testing.T) {
-	for octet := 0; octet <= 255; octet++ {
+	for octet := range 256 {
 		t.Run(fmt.Sprintf("0x%02X", octet), func(t *testing.T) {
 			want := !((octet < 0x20 && octet != '\t') || octet == 0x7f)
 			require.Equal(t, want, IsFieldValue("a"+string([]byte{byte(octet)})+"z"))
