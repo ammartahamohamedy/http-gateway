@@ -30,19 +30,13 @@ var protectedConnectionOptions = []string{"host", "content-length", "transfer-en
 // This function does not apply options, remove nominated fields, or decide
 // connection persistence. The input is not changed.
 func ParseConnection(values []string) ([]string, error) {
-	var options []string
+	options, ok := grammar.SplitTokenList(values)
+	if !ok {
+		return nil, ErrInvalidConnection
+	}
 
-	for value := range slices.Values(values) {
-		members, ok := grammar.SplitList(value)
-		if !ok {
-			return nil, ErrInvalidConnection
-		}
-		for member := range slices.Values(members) {
-			if !grammar.IsToken(member) {
-				return nil, ErrInvalidConnection
-			}
-			options = append(options, strings.ToLower(member))
-		}
+	for index := range options {
+		options[index] = strings.ToLower(options[index])
 	}
 
 	return options, nil

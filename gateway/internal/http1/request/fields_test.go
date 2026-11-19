@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ func TestProcessFieldsFirstErrorIsDeterministic(t *testing.T) {
 	headers := header.Section{"host": {"a", "b"}, "content-length": {"x"}}
 	for range 20 {
 		_, err := processFields(originLine, headers)
-		var fieldErr *FieldError
+		var fieldErr *http1.FieldError
 		require.ErrorAs(t, err, &fieldErr)
 		require.Equal(t, "Host", fieldErr.Name)
 	}
@@ -40,7 +41,7 @@ func TestProcessFieldsFirstErrorIsDeterministic(t *testing.T) {
 func TestFieldErrorWrapping(t *testing.T) {
 	_, err := processFields(originLine, header.Section{"host": {"example.com"}, "content-length": {"-1"}})
 	require.ErrorIs(t, err, fields.ErrInvalidContentLength)
-	var fieldErr *FieldError
+	var fieldErr *http1.FieldError
 	require.ErrorAs(t, err, &fieldErr)
 	require.Equal(t, "Content-Length", fieldErr.Name)
 	require.Equal(t, fields.ErrInvalidContentLength.Error(), err.Error())
@@ -125,7 +126,7 @@ func TestCrossChecksRunAfterFieldRules(t *testing.T) {
 	parsed, err := processFields(originLine, header.Section{"host": {"example.com"}, "content-length": {"7"}})
 	require.ErrorIs(t, err, checkErr)
 	require.Zero(t, parsed)
-	var fieldErr *FieldError
+	var fieldErr *http1.FieldError
 	require.ErrorAs(t, err, &fieldErr)
 	require.Equal(t, "Content-Length", fieldErr.Name)
 	require.Equal(t, []Fields{{Authority: "example.com", ContentLength: 7, ContentLengthPresent: true}}, seen)
@@ -147,7 +148,7 @@ func TestTransferEncodingErrors(t *testing.T) {
 			parsed, err := processFields(originLine, headers)
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
-			var fieldErr *FieldError
+			var fieldErr *http1.FieldError
 			require.ErrorAs(t, err, &fieldErr)
 			require.Equal(t, "Transfer-Encoding", fieldErr.Name)
 		})
@@ -170,7 +171,7 @@ func TestFramingConflict(t *testing.T) {
 			require.ErrorIs(t, err, fields.ErrFramingConflict)
 			require.NotErrorIs(t, err, fields.ErrInvalidTransferEncoding)
 			require.Zero(t, parsed)
-			var fieldErr *FieldError
+			var fieldErr *http1.FieldError
 			require.ErrorAs(t, err, &fieldErr)
 			require.Equal(t, "Transfer-Encoding", fieldErr.Name)
 		})
@@ -209,7 +210,7 @@ func TestConnectionErrors(t *testing.T) {
 	parsed, err := processFields(originLine, headers)
 	require.ErrorIs(t, err, fields.ErrInvalidConnection)
 	require.Zero(t, parsed)
-	var fieldErr *FieldError
+	var fieldErr *http1.FieldError
 	require.ErrorAs(t, err, &fieldErr)
 	require.Equal(t, "Connection", fieldErr.Name)
 }
@@ -222,7 +223,7 @@ func TestConnectionNominatingProtectedField(t *testing.T) {
 			require.ErrorIs(t, err, fields.ErrProtectedConnectionOption)
 			require.NotErrorIs(t, err, fields.ErrInvalidConnection)
 			require.Zero(t, parsed)
-			var fieldErr *FieldError
+			var fieldErr *http1.FieldError
 			require.ErrorAs(t, err, &fieldErr)
 			require.Equal(t, "Connection", fieldErr.Name)
 		})
@@ -253,7 +254,7 @@ func TestExpectErrors(t *testing.T) {
 	parsed, err := processFields(originLine, headers)
 	require.ErrorIs(t, err, fields.ErrInvalidExpect)
 	require.Zero(t, parsed)
-	var fieldErr *FieldError
+	var fieldErr *http1.FieldError
 	require.ErrorAs(t, err, &fieldErr)
 	require.Equal(t, "Expect", fieldErr.Name)
 }
@@ -273,7 +274,7 @@ func TestExpectWithoutContent(t *testing.T) {
 			require.ErrorIs(t, err, fields.ErrExpectWithoutContent)
 			require.NotErrorIs(t, err, fields.ErrInvalidExpect)
 			require.Zero(t, parsed)
-			var fieldErr *FieldError
+			var fieldErr *http1.FieldError
 			require.ErrorAs(t, err, &fieldErr)
 			require.Equal(t, "Expect", fieldErr.Name)
 		})
@@ -309,7 +310,7 @@ func TestMediaTypeFieldErrors(t *testing.T) {
 			parsed, err := processFields(originLine, test.headers)
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
-			var fieldErr *FieldError
+			var fieldErr *http1.FieldError
 			require.ErrorAs(t, err, &fieldErr)
 			require.Equal(t, test.field, fieldErr.Name)
 		})
@@ -332,7 +333,7 @@ func TestContentCodingFieldErrors(t *testing.T) {
 			parsed, err := processFields(originLine, test.headers)
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
-			var fieldErr *FieldError
+			var fieldErr *http1.FieldError
 			require.ErrorAs(t, err, &fieldErr)
 			require.Equal(t, test.field, fieldErr.Name)
 		})
@@ -372,7 +373,7 @@ func TestCORSFieldErrors(t *testing.T) {
 			parsed, err := processFields(originLine, test.headers)
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
-			var fieldErr *FieldError
+			var fieldErr *http1.FieldError
 			require.ErrorAs(t, err, &fieldErr)
 			require.Equal(t, test.field, fieldErr.Name)
 		})
@@ -402,7 +403,7 @@ func TestTrailerField(t *testing.T) {
 			parsed, err := processFields(originLine, header.Section{"host": {"example.com"}, "trailer": {test.value}})
 			require.ErrorIs(t, err, test.want)
 			require.Zero(t, parsed)
-			var fieldErr *FieldError
+			var fieldErr *http1.FieldError
 			require.ErrorAs(t, err, &fieldErr)
 			require.Equal(t, "Trailer", fieldErr.Name)
 		})

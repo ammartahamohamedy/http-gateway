@@ -85,3 +85,52 @@ func TestIsChunkExtension(t *testing.T) {
 		require.False(t, IsChunkExtension(text), "%q", text)
 	}
 }
+
+func TestSplitTokenList(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+		want   []string
+	}{
+		{"absent", nil, nil},
+		{"empty value", []string{""}, nil},
+		{"only commas", []string{" , ,"}, nil},
+		{"one token", []string{"close"}, []string{"close"}},
+		{"case preserved", []string{"Keep-Alive, GET"}, []string{"Keep-Alive", "GET"}},
+		{"surrounding whitespace", []string{" a ,\tb "}, []string{"a", "b"}},
+		{"empty members dropped", []string{",a,,b,"}, []string{"a", "b"}},
+		{"repeated lines form one list", []string{"a, b", "c"}, []string{"a", "b", "c"}},
+		{"asterisk is a token", []string{"*"}, []string{"*"}},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			tokens, ok := SplitTokenList(test.values)
+			require.True(t, ok)
+			require.Equal(t, test.want, tokens)
+		})
+	}
+}
+
+func TestSplitTokenListRejectsNonTokens(t *testing.T) {
+	tests := []struct {
+		name   string
+		values []string
+	}{
+		{"space inside member", []string{"a b"}},
+		{"separator", []string{"a/b"}},
+		{"quoted member", []string{`"a"`}},
+		{"unterminated quote", []string{`"a`}},
+		{"parameter", []string{"a;b=c"}},
+		{"obs-text", []string{"a\xff"}},
+		{"invalid second line", []string{"a", "b c"}},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			tokens, ok := SplitTokenList(test.values)
+			require.False(t, ok)
+			require.Nil(t, tokens)
+		})
+	}
+}

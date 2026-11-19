@@ -12,6 +12,7 @@ import (
 type Message struct {
 	Line    Line
 	Headers header.Section
+	Fields  Fields
 	Body    io.ReadCloser
 
 	// Trailers holds the allowed trailer fields, set once Body returns io.EOF.

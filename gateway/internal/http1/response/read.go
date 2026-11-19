@@ -1,7 +1,11 @@
 // Package response reads and validates HTTP/1.1 response messages.
 package response
 
-import "bufio"
+import (
+	"bufio"
+
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
+)
 
 // Read reads the final response to a request sent with requestMethod, after the
 // interim (1xx) responses that readFinalHead passes to onInterim. It validates
@@ -26,6 +30,11 @@ func Read(reader *bufio.Reader, requestMethod string, onInterim func(*Message) e
 	// interim responses to onInterim.
 	if message.Line, message.Headers, err = readFinalHead(reader, onInterim); err != nil {
 		return nil, err
+	}
+
+	// Field stage: validate supported fields and collect their metadata.
+	if message.Fields, err = processFields(message.Line, message.Headers); err != nil {
+		return nil, &http1.StageError{Stage: http1.StageFields, Err: err}
 	}
 
 	return &message, nil

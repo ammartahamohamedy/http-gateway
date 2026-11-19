@@ -39,19 +39,13 @@ var forbiddenTrailerFields = []string{
 // Section 5.6.1). Errors match ErrInvalidTrailer and return nil. The input is
 // not changed.
 func ParseTrailer(values []string) ([]string, error) {
-	var names []string
+	names, ok := grammar.SplitTokenList(values)
+	if !ok {
+		return nil, ErrInvalidTrailer
+	}
 
-	for value := range slices.Values(values) {
-		members, ok := grammar.SplitList(value)
-		if !ok {
-			return nil, ErrInvalidTrailer
-		}
-		for member := range slices.Values(members) {
-			if !grammar.IsToken(member) {
-				return nil, ErrInvalidTrailer
-			}
-			names = append(names, strings.ToLower(member))
-		}
+	for index := range names {
+		names[index] = strings.ToLower(names[index])
 	}
 
 	return names, nil

@@ -25,3 +25,16 @@ type StageError struct {
 func (stageErr *StageError) Error() string { return stageErr.Err.Error() }
 
 func (stageErr *StageError) Unwrap() error { return stageErr.Err }
+
+// FieldError reports which supported field rule or cross-check rejected a
+// message. Error returns the underlying message unchanged, since field errors
+// already name their field; Name is for callers using errors.As. Unwrap keeps
+// errors.Is working for sentinels such as fields.ErrInvalidHost.
+type FieldError struct {
+	Name string
+	Err  error
+}
+
+func (fieldErr *FieldError) Error() string { return fieldErr.Err.Error() }
+
+func (fieldErr *FieldError) Unwrap() error { return fieldErr.Err }

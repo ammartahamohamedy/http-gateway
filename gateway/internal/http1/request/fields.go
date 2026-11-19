@@ -3,6 +3,7 @@ package request
 import (
 	"slices"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 )
 
@@ -45,19 +46,6 @@ type Fields struct {
 	// fields.ParseAccessControlRequestHeaders; nil when absent.
 	AccessControlRequestHeaders []string
 }
-
-// FieldError reports which supported field rule or cross-check rejected a
-// request. Error returns the underlying message unchanged, since field errors
-// already name their field; Name is for callers using errors.As. Unwrap keeps
-// errors.Is working for sentinels such as fields.ErrInvalidHost.
-type FieldError struct {
-	Name string
-	Err  error
-}
-
-func (fieldErr *FieldError) Error() string { return fieldErr.Err.Error() }
-
-func (fieldErr *FieldError) Unwrap() error { return fieldErr.Err }
 
 // fieldRule parses and validates one named field. apply receives only
 // that field's separate field-line values, nil when absent, and must handle
@@ -103,20 +91,20 @@ var crossChecks = []crossCheck{
 }
 
 // processFields runs every field rule in order and then every
-// cross-check, wrapping the first failure in a *FieldError. On failure it
+// cross-check, wrapping the first failure in a *http1.FieldError. On failure it
 // returns zero Fields so partially parsed metadata cannot escape.
 func processFields(line Line, headers header.Section) (Fields, error) {
 	var parsed Fields
 
 	for rule := range slices.Values(fieldRules) {
 		if err := rule.apply(headers.Values(rule.name), line, &parsed); err != nil {
-			return Fields{}, &FieldError{Name: rule.name, Err: err}
+			return Fields{}, &http1.FieldError{Name: rule.name, Err: err}
 		}
 	}
 
 	for check := range slices.Values(crossChecks) {
 		if err := check.apply(line, headers, parsed); err != nil {
-			return Fields{}, &FieldError{Name: check.name, Err: err}
+			return Fields{}, &http1.FieldError{Name: check.name, Err: err}
 		}
 	}
 

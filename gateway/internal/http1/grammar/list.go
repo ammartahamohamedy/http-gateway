@@ -26,6 +26,30 @@ func SplitList(value string) ([]string, bool) {
 	return members, true
 }
 
+// SplitTokenList splits field-line values into one list of tokens in received
+// order and case, so repeated field lines form a single list (RFC 9110, Section
+// 5.6.1). Empty members are dropped, and no members return nil. It reports false
+// when a member is not a token or a quoted-string is unterminated.
+func SplitTokenList(values []string) ([]string, bool) {
+	var tokens []string
+
+	for value := range slices.Values(values) {
+		members, ok := SplitList(value)
+		if !ok {
+			return nil, false
+		}
+
+		for member := range slices.Values(members) {
+			if !IsToken(member) {
+				return nil, false
+			}
+			tokens = append(tokens, member)
+		}
+	}
+
+	return tokens, true
+}
+
 // SplitUnquoted splits text at every sep outside a quoted-string, keeping empty
 // parts and all other bytes. A backslash escapes the next byte only inside a
 // quoted-string. It reports false for an unterminated quoted-string.

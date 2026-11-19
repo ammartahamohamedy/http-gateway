@@ -11,8 +11,8 @@ import (
 // Read reads one request from reader: the request-line, after skipping up to
 // maxLeadingEmptyLines empty lines, then the header section and the supported
 // fields, validated by processFields. Every error is a *http1.StageError naming
-// the failed stage; field failures wrap a *FieldError. Gateway policy remains
-// separate.
+// the failed stage; field failures wrap a *http1.FieldError. Gateway policy
+// remains separate.
 //
 // Body reads lazily from reader, so bytes after the body stay there; Message
 // describes its framing.

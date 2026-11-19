@@ -47,6 +47,11 @@ var (
 	// ErrFramingConflict reports a message with both Transfer-Encoding and
 	// Content-Length, a smuggling and splitting vector (RFC 9112, Section 6.3).
 	ErrFramingConflict = errors.New("http1: message must not combine Transfer-Encoding and Content-Length")
+
+	// ErrFramingOnBodilessStatus reports Content-Length or Transfer-Encoding in a
+	// 1xx or 204 response, which a server must not send (RFC 9110, Section 8.6;
+	// RFC 9112, Section 6.1).
+	ErrFramingOnBodilessStatus = errors.New("http1: 1xx and 204 responses must not carry Content-Length or Transfer-Encoding")
 )
 
 // ParseTransferEncoding returns a message's transfer-coding names in applied

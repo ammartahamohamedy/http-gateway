@@ -393,7 +393,7 @@ func TestReadTagsFailedStage(t *testing.T) {
 
 func TestReadStageErrorKeepsFieldError(t *testing.T) {
 	_, err := Read(bufio.NewReader(strings.NewReader("GET / HTTP/1.1\r\nHost: a b\r\n\r\n")))
-	var fieldErr *FieldError
+	var fieldErr *http1.FieldError
 	require.ErrorAs(t, err, &fieldErr)
 	require.Equal(t, "Host", fieldErr.Name)
 }

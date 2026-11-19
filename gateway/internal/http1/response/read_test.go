@@ -46,6 +46,7 @@ func TestRead(t *testing.T) {
 				"content-type":   {"application/json"},
 				"content-length": {"2"},
 			}, message.Headers)
+			require.Equal(t, Fields{ContentLength: 2, ContentLengthPresent: true}, message.Fields)
 
 			rest, err := io.ReadAll(reader)
 			require.NoError(t, err)
