@@ -1,17 +1,21 @@
 package proxy
 
 import (
+	"bufio"
 	"io"
 	"net"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/response"
 	"github.com/stretchr/testify/require"
 )
 
-// serve runs HandleConnection on one end of a pipe and returns the client end
-// and a channel closed when the handler returns.
-func serve(t *testing.T) (net.Conn, <-chan struct{}) {
+// serve runs HandleConnection with config on one end of a pipe and returns the
+// client end and a channel closed when the handler returns.
+func serve(t *testing.T, config Config) (net.Conn, <-chan struct{}) {
 	t.Helper()
 	client, server := net.Pipe()
 	t.Cleanup(func() { _ = client.Close() })
@@ -19,7 +23,7 @@ func serve(t *testing.T) (net.Conn, <-chan struct{}) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		HandleConnection(server)
+		HandleConnection(server, config)
 	}()
 
 	return client, done
@@ -34,66 +38,141 @@ func waitForHandler(t *testing.T, done <-chan struct{}) {
 	}
 }
 
+// exchange sends raw to HandleConnection with config, without waiting for it
+// to be read in full, and returns the response the client receives with its
+// body.
+func exchange(t *testing.T, raw string, config Config) (*response.Message, string) {
+	t.Helper()
+	client, done := serve(t, config)
+
+	go func() { _, _ = io.WriteString(client, raw) }()
+
+	reader := bufio.NewReader(client)
+	message, err := response.Read(reader, "GET", nil)
+	require.NoError(t, err)
+
+	content, err := io.ReadAll(message.Body)
+	require.NoError(t, err)
+
+	waitForHandler(t, done)
+	return message, string(content)
+}
+
+func TestHandleConnectionForwardsRequests(t *testing.T) {
+	upstream, requests := fakeUpstream(t, replyWith("HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nok"))
+
+	tests := []struct {
+		name    string
+		raw     string
+		content string
+	}{
+		{"no body", "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", ""},
+		{"Content-Length body", "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello", "hello"},
+		{"chunked body", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n", "hello"},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			message, content := exchange(t, test.raw, Config{Upstream: upstream})
+			require.Equal(t, 200, message.Line.StatusCode)
+			require.Equal(t, "ok", content)
+			require.Equal(t, test.content, string((<-requests).content))
+		})
+	}
+}
+
+func TestHandleConnectionAnswersContinueLocally(t *testing.T) {
+	upstream, requests := fakeUpstream(t, replyWith("HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n"))
+	client, done := serve(t, Config{Upstream: upstream})
+
+	go func() {
+		_, _ = io.WriteString(client, "POST /documents HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nExpect: 100-continue\r\n\r\n")
+	}()
+
+	reader := bufio.NewReader(client)
+	interim := make([]byte, len(continueResponse))
+	_, err := io.ReadFull(reader, interim)
+	require.NoError(t, err)
+	require.Equal(t, continueResponse, string(interim))
+
+	go func() { _, _ = io.WriteString(client, "hello") }()
+
+	final, err := response.Read(reader, "POST", nil)
+	require.NoError(t, err)
+	require.Equal(t, 201, final.Line.StatusCode)
+	waitForHandler(t, done)
+
+	sent := <-requests
+	require.Equal(t, "hello", string(sent.content))
+	require.Nil(t, sent.message.Headers.Values("Expect"), "the backend never sees the expectation")
+}
+
+func TestHandleConnectionAnswersRefusedRequests(t *testing.T) {
+	upstream, _ := fakeUpstream(t, replyWith("HTTP/1.1 204 No Content\r\n\r\n"))
+
+	tests := []struct {
+		name   string
+		raw    string
+		status int
+	}{
+		{"malformed request-line", "GET  / HTTP/1.1\r\nHost: example.com\r\n\r\n", 400},
+		{"HTTP/1.0", "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n", 400},
+		{"missing Host", "GET / HTTP/1.1\r\n\r\n", 400},
+		{"framing conflict", "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n", 400},
+		{"ambiguous path", "GET /a/../b HTTP/1.1\r\nHost: example.com\r\n\r\n", 400},
+		{"request-line too long", "GET /" + strings.Repeat("a", 9000) + " HTTP/1.1\r\nHost: a\r\n\r\n", 414},
+		{"header section too large", "GET / HTTP/1.1\r\nHost: a\r\n" + strings.Repeat("X-Pad: "+strings.Repeat("a", 4000)+"\r\n", 9) + "\r\n", 431},
+		{"declared body too large", "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 2000000\r\n\r\n", 413},
+		{"unsupported expectation", "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 5\r\nExpect: x-custom\r\n\r\n", 417},
+		{"unsupported transfer coding", "POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: compress, chunked\r\n\r\n", 501},
+		{"CONNECT", "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n", 501},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			message, content := exchange(t, test.raw, Config{Upstream: upstream})
+			require.Equal(t, test.status, message.Line.StatusCode)
+			require.Equal(t, []string{"close"}, message.Headers.Values("Connection"))
+			require.Empty(t, content)
+		})
+	}
+}
+
+func TestHandleConnectionAnswersUpstreamFailures(t *testing.T) {
+	message, _ := exchange(t, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", Config{Upstream: unusedAddress(t)})
+	require.Equal(t, 502, message.Line.StatusCode)
+}
+
 func TestHandleConnectionTimesOutSlowRequestHead(t *testing.T) {
 	saved := requestHeadTimeout
 	t.Cleanup(func() { requestHeadTimeout = saved })
 	requestHeadTimeout = 50 * time.Millisecond
 
-	client, done := serve(t)
-	_, err := client.Write([]byte("GET / HTTP/1.1\r\nHost: exam"))
-	require.NoError(t, err)
-
-	waitForHandler(t, done)
-	_, err = client.Read(make([]byte, 1))
-	require.ErrorIs(t, err, io.EOF, "the connection must be closed")
+	message, _ := exchange(t, "GET / HTTP/1.1\r\nHost: exam", Config{Upstream: unusedAddress(t)})
+	require.Equal(t, 408, message.Line.StatusCode)
 }
 
-func TestHandleConnectionFinishesCompleteRequestHead(t *testing.T) {
-	client, done := serve(t)
-	_, err := client.Write([]byte("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"))
-	require.NoError(t, err)
-	waitForHandler(t, done)
-}
+func TestHandleConnectionTimesOutSlowBody(t *testing.T) {
+	setBodyTimeouts(t, 50*time.Millisecond, time.Minute)
 
-func TestHandleConnectionReadsContentLengthBody(t *testing.T) {
-	client, done := serve(t)
-	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhello"))
-	require.NoError(t, err)
-	waitForHandler(t, done)
-}
-
-func TestHandleConnectionReadsChunkedBody(t *testing.T) {
-	client, done := serve(t)
-	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n"))
-	require.NoError(t, err)
-	waitForHandler(t, done)
-}
-
-func TestHandleConnectionRejectsUnsupportedExpectation(t *testing.T) {
-	client, done := serve(t)
-	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nExpect: x-custom\r\n\r\n"))
-	require.NoError(t, err)
-	waitForHandler(t, done)
-	_, err = client.Read(make([]byte, 1))
-	require.ErrorIs(t, err, io.EOF, "nothing may be written before closing")
+	message, _ := exchange(t, "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhe", Config{Upstream: unusedAddress(t)})
+	require.Equal(t, 408, message.Line.StatusCode)
 }
 
 func TestHandleConnectionClosesAfterTruncatedBody(t *testing.T) {
 	setBodyTimeouts(t, time.Minute, time.Minute)
-	client, done := serve(t)
+	client, done := serve(t, Config{Upstream: unusedAddress(t)})
+
 	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhe"))
 	require.NoError(t, err)
 	require.NoError(t, client.Close())
+
 	// With minute-long timeouts, only the early end of the body can end the handler.
 	waitForHandler(t, done)
 }
 
-func TestHandleConnectionClosesAfterBodyTimeout(t *testing.T) {
-	setBodyTimeouts(t, 50*time.Millisecond, time.Minute)
-	client, done := serve(t)
-	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhe"))
-	require.NoError(t, err)
+func TestHandleConnectionClosesSilentlyWithoutARequest(t *testing.T) {
+	client, done := serve(t, Config{Upstream: unusedAddress(t)})
+	require.NoError(t, client.Close())
 	waitForHandler(t, done)
-	_, err = client.Read(make([]byte, 1))
-	require.ErrorIs(t, err, io.EOF, "the connection must be closed without a response")
 }

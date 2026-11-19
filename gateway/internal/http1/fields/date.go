@@ -18,6 +18,10 @@ const (
 
 	// timeOfDay captures the second, which may be 60 for a leap second.
 	timeOfDay = `[0-9]{2}:[0-9]{2}:([0-9]{2})`
+
+	// imfFixdateLayout is the time layout of IMF-fixdate, the HTTP-date format
+	// senders generate.
+	imfFixdateLayout = "Mon, 02 Jan 2006 15:04:05 GMT"
 )
 
 // httpDateFormats pairs the exact syntax of each HTTP-date format with the time
@@ -30,7 +34,7 @@ var httpDateFormats = []struct {
 }{
 	{
 		regexp.MustCompile(`\A` + shortDayNames + `, [0-9]{2} ` + monthNames + ` [0-9]{4} ` + timeOfDay + ` GMT\z`),
-		"Mon, 02 Jan 2006 15:04:05 GMT",
+		imfFixdateLayout,
 	},
 	{
 		regexp.MustCompile(`\A` + longDayNames + `, [0-9]{2}-` + monthNames + `-[0-9]{2} ` + timeOfDay + ` GMT\z`),
@@ -40,6 +44,12 @@ var httpDateFormats = []struct {
 		regexp.MustCompile(`\A` + shortDayNames + ` ` + monthNames + ` (?:[0-9]{2}| [0-9]) ` + timeOfDay + ` [0-9]{4}\z`),
 		"Mon Jan _2 15:04:05 2006",
 	},
+}
+
+// FormatDate returns moment as an IMF-fixdate in UTC, the HTTP-date format
+// senders generate (RFC 9110, Section 5.6.7).
+func FormatDate(moment time.Time) string {
+	return moment.UTC().Format(imfFixdateLayout)
 }
 
 // ValidateDate checks that a supplied Date field holds exactly one HTTP-date

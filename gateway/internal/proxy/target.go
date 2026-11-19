@@ -41,15 +41,11 @@ func checkRequestTarget(message *request.Message) error {
 	case request.OriginForm:
 		path = target
 	case request.AbsoluteForm:
-		scheme, rest, _ := strings.Cut(target, ":")
+		scheme, _, _ := strings.Cut(target, ":")
 		if !strings.EqualFold(scheme, "http") && !strings.EqualFold(scheme, "https") {
 			return ErrUnsupportedScheme
 		}
-		// request.Read guarantees "//" and a nonempty authority for http(s) targets.
-		rest = strings.TrimPrefix(rest, "//")
-		if start := strings.IndexAny(rest, "/?"); start >= 0 {
-			path = rest[start:]
-		}
+		path = originForm(target)
 	}
 
 	if err := checkPort(message.Fields.Authority); err != nil {
@@ -57,6 +53,25 @@ func checkRequestTarget(message *request.Message) error {
 	}
 
 	return checkPath(path)
+}
+
+// originForm returns the origin-form of an http(s) absolute-form target: its
+// path and query, with "/" for an empty path (RFC 9112, Section 3.2.1). A
+// request forwarded to an origin server uses origin-form (Section 3.2.2).
+// request.Read guarantees "//" and a nonempty authority for such targets.
+func originForm(target string) string {
+	rest := strings.TrimPrefix(target[strings.IndexByte(target, ':')+1:], "//")
+
+	start := strings.IndexAny(rest, "/?")
+	if start < 0 {
+		return "/"
+	}
+
+	if rest[start] == '?' {
+		return "/" + rest[start:]
+	}
+
+	return rest[start:]
 }
 
 // checkPort validates the port of a URI authority already checked by request.Read.

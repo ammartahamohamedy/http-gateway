@@ -67,3 +67,24 @@ func TestCheckRequestTarget(t *testing.T) {
 		})
 	}
 }
+
+func TestOriginForm(t *testing.T) {
+	tests := []struct {
+		target string
+		want   string
+	}{
+		{"http://example.com/a/b?q=1", "/a/b?q=1"},
+		{"http://example.com", "/"},
+		{"http://example.com:8080", "/"},
+		{"HTTPS://example.com/", "/"},
+		{"http://example.com?q", "/?q"},
+		{"http://[::1]:8080/a", "/a"},
+		{"http://example.com/a%2Fb?x=%20", "/a%2Fb?x=%20"},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.target, func(t *testing.T) {
+			require.Equal(t, test.want, originForm(test.target))
+		})
+	}
+}

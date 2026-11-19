@@ -2,7 +2,6 @@ package proxy
 
 import (
 	"bufio"
-	"fmt"
 	"log"
 	"net"
 	"time"
@@ -15,53 +14,76 @@ import (
 // it slowly cannot hold the connection. A per-line cap alone would not stop that.
 var requestHeadTimeout = 10 * time.Second
 
-// HandleConnection reads one request head within requestHeadTimeout, checks
-// transfer coding, target, and expectation policy, buffers the body
-// (readRequestBody), and prints the request if accepted. It attempts to close
-// the connection before returning. Deadline, read, validation, policy, and
-// close errors are logged without terminating the listener. Apart from 100
-// (Continue), no response is sent, and nothing is forwarded.
-func HandleConnection(connection net.Conn) {
+// Config holds the gateway settings HandleConnection needs.
+type Config struct {
+	// Upstream is the backend's TCP address, host:port: dialed for every
+	// exchange and sent as the forwarded request's Host.
+	Upstream string
+}
+
+// HandleConnection runs one exchange on connection, the client socket it owns.
+// It reads the request head within requestHeadTimeout, applies transfer
+// coding, target, and expectation policy, buffers the body (readRequestBody),
+// and forwards the request to config.Upstream (forward).
+//
+// A request that fails to read or is refused gets the status
+// requestErrorStatus chooses, and an upstream failure before the final
+// response is committed gets the one upstreamErrorStatus chooses, both written
+// by writeErrorResponse. The connection is closed before returning, and every
+// error is logged without terminating the listener.
+func HandleConnection(connection net.Conn, config Config) {
 	defer func() {
 		if err := connection.Close(); err != nil {
 			log.Printf("closing connection: %v", err)
 		}
 	}()
 
+	reject := func(err error, requestMethod string) {
+		log.Printf("rejecting request: %v", err)
+		if status := requestErrorStatus(err); status != 0 {
+			writeErrorResponse(connection, status, requestMethod)
+		}
+	}
+
 	if err := connection.SetReadDeadline(time.Now().Add(requestHeadTimeout)); err != nil {
 		log.Printf("setting read deadline: %v", err)
 		return
 	}
 
-	reader := bufio.NewReader(connection)
-
-	message, err := request.Read(reader)
-	if err == nil {
-		err = fields.CheckTransferCodingSupport(message.Fields.TransferCodings)
-	}
+	message, err := request.Read(bufio.NewReader(connection))
 	if err != nil {
-		log.Printf("reading request: %v", err)
+		reject(err, "")
+		return
+	}
+
+	requestMethod := message.Line.Method
+
+	if err := fields.CheckTransferCodingSupport(message.Fields.TransferCodings); err != nil {
+		reject(err, requestMethod)
 		return
 	}
 
 	if err := checkRequestTarget(message); err != nil {
-		log.Printf("rejecting request: %v", err)
+		reject(err, requestMethod)
 		return
 	}
 
 	if err := fields.CheckExpectationSupport(message.Fields.Expectations); err != nil {
-		log.Printf("rejecting request: %v", err)
+		reject(err, requestMethod)
 		return
 	}
 
 	content, err := readRequestBody(connection, message)
 	if err != nil {
-		log.Printf("reading request body: %v", err)
+		reject(err, requestMethod)
 		return
 	}
 
-	fmt.Printf("Method: %s\nRequest target: %s\nVersion: %s\nAuthority: %s\n",
-		message.Line.Method, message.Line.RequestTarget,
-		message.Line.Version, message.Fields.Authority)
-	fmt.Printf("Body: %d bytes\n", len(content))
+	committed, err := forward(connection, message, content, config)
+	if err != nil {
+		log.Printf("forwarding request: %v", err)
+		if !committed {
+			writeErrorResponse(connection, upstreamErrorStatus(err), requestMethod)
+		}
+	}
 }

@@ -3,6 +3,7 @@ package fields
 import (
 	"slices"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -64,4 +65,10 @@ func TestValidateDateRejectsInvalidValues(t *testing.T) {
 			require.ErrorIs(t, ValidateDate(test.values), ErrInvalidDate)
 		})
 	}
+}
+
+func TestFormatDate(t *testing.T) {
+	moment := time.Date(1994, time.November, 6, 10, 49, 37, 0, time.FixedZone("UTC+2", 2*60*60))
+	require.Equal(t, "Sun, 06 Nov 1994 08:49:37 GMT", FormatDate(moment))
+	require.NoError(t, ValidateDate([]string{FormatDate(time.Now())}))
 }
