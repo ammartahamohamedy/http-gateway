@@ -15,6 +15,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// testConfig returns a Config for upstream serving the hosts the tests send.
+func testConfig(upstream string) Config {
+	return Config{Upstream: upstream, Hosts: []string{"example.com", "a"}}
+}
+
 // serve runs HandleConnection with config on one end of a pipe and returns the
 // client end and a channel closed when the handler returns.
 func serve(t *testing.T, config Config) (net.Conn, <-chan struct{}) {
@@ -75,7 +80,7 @@ func TestHandleConnectionForwardsRequests(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			message, content := exchange(t, test.raw, Config{Upstream: upstream})
+			message, content := exchange(t, test.raw, testConfig(upstream))
 			require.Equal(t, 200, message.Line.StatusCode)
 			require.Equal(t, "ok", content)
 			require.Equal(t, test.content, string((<-requests).content))
@@ -85,7 +90,7 @@ func TestHandleConnectionForwardsRequests(t *testing.T) {
 
 func TestHandleConnectionAnswersContinueLocally(t *testing.T) {
 	upstream, requests := fakeUpstream(t, replyWith("HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n"))
-	client, done := serve(t, Config{Upstream: upstream})
+	client, done := serve(t, testConfig(upstream))
 
 	go func() {
 		_, _ = io.WriteString(client, "POST /documents HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\nExpect: 100-continue\r\n\r\n")
@@ -131,13 +136,15 @@ func TestHandleConnectionAnswersRefusedRequests(t *testing.T) {
 		{"unsupported transfer coding", "POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: compress, chunked\r\n\r\n", 501},
 		{"CONNECT", "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n", 501},
 		{"TRACE", "TRACE / HTTP/1.1\r\nHost: example.com\r\n\r\n", 501},
+		{"unserved Host", "GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n", 421},
+		{"unserved absolute-form authority", "GET http://evil.example/ HTTP/1.1\r\nHost: example.com\r\n\r\n", 421},
 		{"TRACE with Max-Forwards 0", "TRACE / HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: 0\r\n\r\n", 501},
 		{"invalid Max-Forwards on OPTIONS", "OPTIONS / HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: x\r\n\r\n", 400},
 	}
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			message, content := exchange(t, test.raw, Config{Upstream: upstream})
+			message, content := exchange(t, test.raw, testConfig(upstream))
 			require.Equal(t, test.status, message.Line.StatusCode)
 			require.Equal(t, []string{"close"}, message.Headers.Values("Connection"))
 			require.Empty(t, content)
@@ -146,7 +153,7 @@ func TestHandleConnectionAnswersRefusedRequests(t *testing.T) {
 }
 
 func TestHandleConnectionAnswersUpstreamFailures(t *testing.T) {
-	message, _ := exchange(t, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", Config{Upstream: unusedAddress(t)})
+	message, _ := exchange(t, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", testConfig(unusedAddress(t)))
 	require.Equal(t, 502, message.Line.StatusCode)
 }
 
@@ -155,20 +162,20 @@ func TestHandleConnectionTimesOutSlowRequestHead(t *testing.T) {
 	t.Cleanup(func() { requestHeadTimeout = saved })
 	requestHeadTimeout = 50 * time.Millisecond
 
-	message, _ := exchange(t, "GET / HTTP/1.1\r\nHost: exam", Config{Upstream: unusedAddress(t)})
+	message, _ := exchange(t, "GET / HTTP/1.1\r\nHost: exam", testConfig(unusedAddress(t)))
 	require.Equal(t, 408, message.Line.StatusCode)
 }
 
 func TestHandleConnectionTimesOutSlowBody(t *testing.T) {
 	setBodyTimeouts(t, 50*time.Millisecond, time.Minute)
 
-	message, _ := exchange(t, "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhe", Config{Upstream: unusedAddress(t)})
+	message, _ := exchange(t, "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhe", testConfig(unusedAddress(t)))
 	require.Equal(t, 408, message.Line.StatusCode)
 }
 
 func TestHandleConnectionClosesAfterTruncatedBody(t *testing.T) {
 	setBodyTimeouts(t, time.Minute, time.Minute)
-	client, done := serve(t, Config{Upstream: unusedAddress(t)})
+	client, done := serve(t, testConfig(unusedAddress(t)))
 
 	_, err := client.Write([]byte("POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 5\r\n\r\nhe"))
 	require.NoError(t, err)
@@ -179,7 +186,7 @@ func TestHandleConnectionClosesAfterTruncatedBody(t *testing.T) {
 }
 
 func TestHandleConnectionClosesSilentlyWithoutARequest(t *testing.T) {
-	client, done := serve(t, Config{Upstream: unusedAddress(t)})
+	client, done := serve(t, testConfig(unusedAddress(t)))
 	require.NoError(t, client.Close())
 	waitForHandler(t, done)
 }
@@ -192,6 +199,8 @@ func TestAdmitRequest(t *testing.T) {
 	}{
 		{"admitted", "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", nil},
 		{"TRACE", "TRACE / HTTP/1.1\r\nHost: example.com\r\n\r\n", errUnsupportedMethod},
+		{"unserved host", "GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n", errUnservedHost},
+		{"host checked first", "TRACE / HTTP/1.1\r\nHost: evil.example\r\n\r\n", errUnservedHost},
 		{"undecodable transfer coding", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: compress, chunked\r\n\r\n0\r\n\r\n", fields.ErrUnsupportedTransferCoding},
 		{"CONNECT tunnel", "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n", errUnsupportedTargetForm},
 		{"ambiguous path", "GET /a/../b HTTP/1.1\r\nHost: example.com\r\n\r\n", errAmbiguousPath},
@@ -204,7 +213,7 @@ func TestAdmitRequest(t *testing.T) {
 			message, err := request.Read(bufio.NewReader(strings.NewReader(test.raw)))
 			require.NoError(t, err)
 
-			err = admitRequest(message)
+			err = admitRequest(message, testConfig(""))
 			if test.want == nil {
 				require.NoError(t, err)
 				return
@@ -216,7 +225,7 @@ func TestAdmitRequest(t *testing.T) {
 
 func TestHandleConnectionAnswersExhaustedMaxForwardsItself(t *testing.T) {
 	message, content := exchange(t, "OPTIONS * HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: 0\r\n\r\n",
-		Config{Upstream: unusedAddress(t)})
+		testConfig(unusedAddress(t)))
 	require.Equal(t, 200, message.Line.StatusCode, "answered as the final recipient, never forwarded")
 	require.Equal(t, []string{"0"}, message.Headers.Values("Content-Length"))
 	require.Equal(t, []string{"close"}, message.Headers.Values("Connection"))
@@ -225,9 +234,30 @@ func TestHandleConnectionAnswersExhaustedMaxForwardsItself(t *testing.T) {
 
 func TestHandleConnectionForwardsDecrementedMaxForwards(t *testing.T) {
 	upstream, requests := fakeUpstream(t, replyWith("HTTP/1.1 204 No Content\r\n\r\n"))
-	message, _ := exchange(t, "OPTIONS / HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: 3\r\n\r\n", Config{Upstream: upstream})
+	message, _ := exchange(t, "OPTIONS / HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: 3\r\n\r\n", testConfig(upstream))
 	require.Equal(t, 204, message.Line.StatusCode)
 
 	sent := <-requests
 	require.Equal(t, []string{"2"}, sent.message.Headers.Values("Max-Forwards"))
+}
+
+func TestHandleConnectionServesTheAbsoluteFormAuthority(t *testing.T) {
+	upstream, requests := fakeUpstream(t, replyWith("HTTP/1.1 204 No Content\r\n\r\n"))
+	message, _ := exchange(t, "GET http://EXAMPLE.com:8080/x HTTP/1.1\r\nHost: evil.example\r\n\r\n", testConfig(upstream))
+	require.Equal(t, 204, message.Line.StatusCode, "the target's authority, not Host, names the requested host")
+
+	sent := <-requests
+	require.Equal(t, "/x", sent.message.Line.RequestTarget)
+}
+
+func TestHandleConnectionServesNothingWithoutHosts(t *testing.T) {
+	message, _ := exchange(t, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n", Config{Upstream: unusedAddress(t)})
+	require.Equal(t, 421, message.Line.StatusCode)
+}
+
+func TestHandleConnectionAnswers502WhenTheBodyFailsBeforeAnyByte(t *testing.T) {
+	upstream, _ := fakeUpstream(t, replyWith("HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nhello"))
+	message, content := exchange(t, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", testConfig(upstream))
+	require.Equal(t, 502, message.Line.StatusCode)
+	require.Empty(t, content)
 }

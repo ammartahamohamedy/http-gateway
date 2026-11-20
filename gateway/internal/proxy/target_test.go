@@ -88,3 +88,58 @@ func TestOriginForm(t *testing.T) {
 		})
 	}
 }
+
+func TestSplitAuthority(t *testing.T) {
+	tests := []struct {
+		authority string
+		host      string
+		port      string
+	}{
+		{"example.com", "example.com", ""},
+		{"example.com:8080", "example.com", "8080"},
+		{"example.com:", "example.com", ""},
+		{"[::1]", "[::1]", ""},
+		{"[::1]:8080", "[::1]", "8080"},
+		{"", "", ""},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.authority, func(t *testing.T) {
+			host, port := splitAuthority(test.authority)
+			require.Equal(t, test.host, host)
+			require.Equal(t, test.port, port)
+		})
+	}
+}
+
+func TestCheckHost(t *testing.T) {
+	hosts := []string{"localhost", "127.0.0.1", "[::1]", "Example.com"}
+
+	tests := []struct {
+		name      string
+		authority string
+		hosts     []string
+		served    bool
+	}{
+		{"name", "localhost", hosts, true},
+		{"name with port", "localhost:8080", hosts, true},
+		{"case-insensitive", "EXAMPLE.COM", hosts, true},
+		{"IPv4 literal", "127.0.0.1:8080", hosts, true},
+		{"IPv6 literal", "[::1]:8080", hosts, true},
+		{"another host", "evil.example", hosts, false},
+		{"served name as a suffix", "evil.localhost", hosts, false},
+		{"empty authority", "", append(slices.Clone(hosts), ""), false},
+		{"no hosts configured", "localhost", nil, false},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			err := checkHost(test.authority, test.hosts)
+			if test.served {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, errUnservedHost)
+		})
+	}
+}

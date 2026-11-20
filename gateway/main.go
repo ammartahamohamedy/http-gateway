@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strings"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/proxy"
 )
@@ -12,6 +13,7 @@ import (
 func main() {
 	var address = flag.String("addr", "127.0.0.1:8080", "TCP address to listen on (host:port)")
 	var upstream = flag.String("upstream", "127.0.0.1:8081", "TCP address of the Rust backend (host:port)")
+	var hosts = flag.String("hosts", "localhost,127.0.0.1,[::1]", "comma-separated host names and IP literals the gateway serves")
 
 	flag.Parse()
 
@@ -26,7 +28,7 @@ func main() {
 		}
 	}()
 
-	config := proxy.Config{Upstream: *upstream}
+	config := proxy.Config{Upstream: *upstream, Hosts: strings.Split(*hosts, ",")}
 
 	for {
 		connection, err := listener.Accept()

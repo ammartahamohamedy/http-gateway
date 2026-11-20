@@ -3,6 +3,7 @@ package proxy
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -149,8 +150,9 @@ func relayInterim(client net.Conn, requestMethod string) func(*response.Message)
 // relayResponse writes final, the response to a requestMethod request, to
 // client, copying its body from upstream as it arrives. Each body read may
 // wait responseBodyIdleTimeout, and the copy and its writes end within
-// responseBodyTimeout. It reports committed as forward does: a failure before
-// response.Write starts leaves the exchange uncommitted.
+// responseBodyTimeout. The exchange commits with the first byte that reaches
+// client (commitWriter), so a failure while response.Write still holds
+// everything in its buffer leaves it uncommitted.
 func relayResponse(client, upstream net.Conn, final *response.Message, requestMethod string) (committed bool, err error) {
 	cutoff := time.Now().Add(responseBodyTimeout)
 	final.Body = newIdleDeadlineReader(upstream, final.Body, responseBodyIdleTimeout, cutoff)
@@ -159,9 +161,25 @@ func relayResponse(client, upstream net.Conn, final *response.Message, requestMe
 		return false, fmt.Errorf("setting client write deadline: %w", err)
 	}
 
-	if err := response.Write(client, final, requestMethod); err != nil {
-		return true, fmt.Errorf("writing response to client: %w", err)
+	output := &commitWriter{writer: client}
+	if err := response.Write(output, final, requestMethod); err != nil {
+		return output.committed, fmt.Errorf("writing response to client: %w", err)
 	}
 
 	return true, nil
+}
+
+// commitWriter passes writes to writer and records whether any byte reached it.
+type commitWriter struct {
+	writer    io.Writer
+	committed bool
+}
+
+func (output *commitWriter) Write(data []byte) (int, error) {
+	count, err := output.writer.Write(data)
+	if count > 0 {
+		output.committed = true
+	}
+
+	return count, err
 }

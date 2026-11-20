@@ -261,11 +261,37 @@ func TestForwardFailsBeforeCommit(t *testing.T) {
 }
 
 func TestForwardTruncatedBodyAfterCommit(t *testing.T) {
+	upstream, _ := fakeUpstream(t, replyWith("HTTP/1.1 200 OK\r\nContent-Length: 100000\r\n\r\n"+strings.Repeat("a", 10000)))
+
+	output, committed, err := runForward(t, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", upstream)
+	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	require.True(t, committed, "bytes reached the client, so no gateway error may follow")
+	require.True(t, strings.HasPrefix(output, "HTTP/1.1 200 OK\r\n"))
+}
+
+func TestForwardTruncatedBodyBeforeAnyByteIsUncommitted(t *testing.T) {
 	upstream, _ := fakeUpstream(t, replyWith("HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\nhello"))
 
-	_, committed, err := runForward(t, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", upstream)
+	output, committed, err := runForward(t, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", upstream)
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
-	require.True(t, committed, "the final response has started, so no gateway error may follow")
+	require.False(t, committed, "the head and body were still buffered, so the caller can answer 502")
+	require.Empty(t, output)
+	require.Equal(t, 502, upstreamErrorStatus(err))
+}
+
+func TestCommitWriterCommitsOnTheFirstByte(t *testing.T) {
+	var sink strings.Builder
+	output := &commitWriter{writer: &sink}
+	require.False(t, output.committed)
+
+	_, err := output.Write(nil)
+	require.NoError(t, err)
+	require.False(t, output.committed, "an empty write sends nothing")
+
+	_, err = output.Write([]byte("H"))
+	require.NoError(t, err)
+	require.True(t, output.committed)
+	require.Equal(t, "H", sink.String())
 }
 
 func TestRelayResponseIsUncommittedWhenTheClientDeadlineFails(t *testing.T) {

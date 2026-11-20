@@ -24,6 +24,12 @@ type Config struct {
 	// Upstream is the backend's TCP address, host:port: dialed for every
 	// exchange and sent as the forwarded request's Host.
 	Upstream string
+
+	// Hosts lists the host names and IP literals the gateway serves, IPv6
+	// literals in brackets. A request for any other host, or for any host when
+	// Hosts is empty, is refused with 421 (Misdirected Request), which also
+	// stops DNS rebinding through browsers.
+	Hosts []string
 }
 
 // HandleConnection runs one exchange on connection, the client socket it owns.
@@ -66,7 +72,7 @@ func HandleConnection(connection net.Conn, config Config) {
 
 	requestMethod := message.Line.Method
 
-	if err := admitRequest(message); err != nil {
+	if err := admitRequest(message, config); err != nil {
 		reject(err, requestMethod)
 		return
 	}
@@ -92,10 +98,14 @@ func HandleConnection(connection net.Conn, config Config) {
 }
 
 // admitRequest applies the gateway's request policy before the body is read: a
-// method it implements, transfer codings it can decode, a request-target it
+// host it serves (checkHost), a method it implements, transfer codings it can decode, a request-target it
 // serves (checkRequestTarget), and expectations it supports. The first refusal is
 // returned for requestErrorStatus to answer.
-func admitRequest(message *request.Message) error {
+func admitRequest(message *request.Message, config Config) error {
+	if err := checkHost(message.Fields.Authority, config.Hosts); err != nil {
+		return err
+	}
+
 	if message.Line.Method == "TRACE" {
 		return errUnsupportedMethod
 	}

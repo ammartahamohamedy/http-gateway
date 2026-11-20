@@ -4,6 +4,7 @@ package proxy
 
 import (
 	"errors"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -22,7 +23,26 @@ var (
 	// errAmbiguousPath reports a path a backend could resolve differently from
 	// the gateway: a leading "//" or a dot-segment, literal or percent-encoded.
 	errAmbiguousPath = errors.New("proxy: request path contains an empty leading segment or dot-segment")
+	// errUnservedHost reports a request whose authority names a host the
+	// gateway does not serve.
+	errUnservedHost = errors.New("proxy: request names a host the gateway does not serve")
 )
+
+// checkHost requires authority, the request's effective authority, to name one
+// of hosts, compared case-insensitively without the port (RFC 9110, Section
+// 7.4). An empty host is never served.
+func checkHost(authority string, hosts []string) error {
+	host, _ := splitAuthority(authority)
+
+	served := slices.ContainsFunc(hosts, func(candidate string) bool {
+		return strings.EqualFold(candidate, host)
+	})
+	if host == "" || !served {
+		return errUnservedHost
+	}
+
+	return nil
+}
 
 // checkRequestTarget applies gateway policy to a request accepted by
 // request.Read. Origin-form, http(s) absolute-form, and asterisk-form are
@@ -77,12 +97,7 @@ func originForm(target string) string {
 // checkPort validates the port of a URI authority already checked by request.Read.
 // An empty port is permitted (RFC 3986, Section 3.2.3).
 func checkPort(authority string) error {
-	colon := strings.LastIndexByte(authority, ':')
-	if colon < 0 || colon < strings.LastIndexByte(authority, ']') {
-		return nil
-	}
-
-	port := authority[colon+1:]
+	_, port := splitAuthority(authority)
 	if port == "" {
 		return nil
 	}
@@ -111,4 +126,16 @@ func checkPath(path string) error {
 	}
 
 	return nil
+}
+
+// splitAuthority splits a URI authority already checked by request.Read into
+// its host, with brackets kept around an IP literal, and its port, empty when
+// absent.
+func splitAuthority(authority string) (host, port string) {
+	colon := strings.LastIndexByte(authority, ':')
+	if colon < 0 || colon < strings.LastIndexByte(authority, ']') {
+		return authority, ""
+	}
+
+	return authority[:colon], authority[colon+1:]
 }

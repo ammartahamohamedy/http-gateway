@@ -41,6 +41,7 @@ func TestRequestErrorStatus(t *testing.T) {
 		{"header line too long", staged(http1.StageHeaders, header.ErrLineTooLong), 431},
 		{"header section too large", staged(http1.StageHeaders, header.ErrSectionTooLarge), 431},
 		{"too many header fields", staged(http1.StageHeaders, header.ErrTooManyFields), 431},
+		{"unserved host", errUnservedHost, 421},
 		{"refused expectation", fields.ErrUnsupportedExpectation, 417},
 		{"unsupported transfer coding", fields.ErrUnsupportedTransferCoding, 501},
 		{"unknown transfer coding", fields.ErrUnknownTransferCoding, 501},

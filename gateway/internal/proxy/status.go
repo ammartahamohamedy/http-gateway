@@ -22,10 +22,10 @@ var errorResponseTimeout = 10 * time.Second
 // or that gateway policy refused, or 0 when no response can be sent: the client
 // ended the connection, or it failed for a reason other than a timeout.
 // Timeouts get 408, oversized bodies 413, an oversized request-line 414, an
-// oversized header section 431, refused expectations 417, unsupported transfer
-// codings, CONNECT, and TRACE 501, and an unsupported HTTP version 505 (RFC
-// 9110, Sections 15.5 and 15.6); every other error is a malformed or refused
-// request, 400.
+// oversized header section 431, a host the gateway does not serve 421, refused
+// expectations 417, unsupported transfer codings, CONNECT, and TRACE 501, and
+// an unsupported HTTP version 505 (RFC 9110, Sections 15.5 and 15.6); every
+// other error is a malformed or refused request, 400.
 func requestErrorStatus(err error) int {
 	netErr, isNetErr := errors.AsType[net.Error](err)
 
@@ -43,6 +43,8 @@ func requestErrorStatus(err error) int {
 	case errors.Is(err, header.ErrLineTooLong), errors.Is(err, header.ErrSectionTooLarge),
 		errors.Is(err, header.ErrTooManyFields):
 		return 431
+	case errors.Is(err, errUnservedHost):
+		return 421
 	case errors.Is(err, fields.ErrUnsupportedExpectation):
 		return 417
 	case errors.Is(err, fields.ErrUnsupportedTransferCoding), errors.Is(err, fields.ErrUnknownTransferCoding),
