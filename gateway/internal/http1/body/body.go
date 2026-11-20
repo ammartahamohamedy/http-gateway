@@ -12,23 +12,23 @@ import (
 )
 
 var (
-	// ErrBodyClosed reports a Read after Close.
-	ErrBodyClosed = errors.New("http1: read on closed body")
+	// errBodyClosed reports a Read after Close.
+	errBodyClosed = errors.New("http1: read on closed body")
 
 	// ErrBodyTooLarge reports a body over its byte limit.
 	ErrBodyTooLarge = errors.New("http1: body exceeds its byte limit")
 )
 
-// NewReader returns the body of msg read from source, delimited as Framing
+// NewReader returns the body of msg read from source, delimited as framing
 // decides: empty for None, the declared length for ContentLength, the chunked
 // data for Chunked, with its trailer section passed to onTrailers, and all data
 // until source ends for UntilClose. The transfer codings other than chunked are
 // then removed. maxBytes caps the body: a declared Content-Length over it
 // returns ErrBodyTooLarge at once, and more data read or decoded returns
 // ErrBodyTooLarge from Read. The body never reads past its end, so following
-// bytes stay in source. Framing errors are returned with a nil body.
+// bytes stay in source. Errors from framing are returned with a nil body.
 func NewReader(source *bufio.Reader, msg Message, maxBytes int64, onTrailers func(header.Section)) (io.ReadCloser, error) {
-	mode, err := Framing(msg)
+	mode, err := framing(msg)
 	if err != nil {
 		return nil, err
 	}
@@ -57,10 +57,10 @@ type closeGuard struct {
 	closed bool
 }
 
-// checkOpen returns ErrBodyClosed after Close.
+// checkOpen returns errBodyClosed after Close.
 func (guard *closeGuard) checkOpen() error {
 	if guard.closed {
-		return ErrBodyClosed
+		return errBodyClosed
 	}
 
 	return nil

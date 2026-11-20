@@ -10,7 +10,7 @@ import (
 // Read reads the final response to a request sent with requestMethod, after the
 // interim (1xx) responses that readFinalHead passes to onInterim. It validates
 // the supported fields into Fields with processFields and attaches Body, which
-// reads lazily from reader with the framing body.Framing selects for
+// reads lazily from reader with the framing body.NewReader selects for
 // requestMethod and the status code, so bytes after the body stay there.
 // Trailers holds the allowed trailer fields once Body returns io.EOF.
 //

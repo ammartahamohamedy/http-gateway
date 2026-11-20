@@ -211,7 +211,7 @@ func TestChunkedReaderClose(t *testing.T) {
 	require.NoError(t, reader.Close())
 	count, err := reader.Read(make([]byte, 5))
 	require.Zero(t, count)
-	require.ErrorIs(t, err, ErrBodyClosed)
+	require.ErrorIs(t, err, errBodyClosed)
 	remaining, err := io.ReadAll(source)
 	require.NoError(t, err)
 	require.Equal(t, wire, string(remaining), "Close must not drain the source")

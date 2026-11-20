@@ -9,13 +9,13 @@ import (
 )
 
 var (
-	// ErrInvalidCoding reports encoded data that its transfer coding cannot
+	// errInvalidCoding reports encoded data that its transfer coding cannot
 	// decode, including a stream cut short within a complete body and data after
 	// the end of the stream.
-	ErrInvalidCoding = errors.New("http1: transfer-coded data is malformed")
+	errInvalidCoding = errors.New("http1: transfer-coded data is malformed")
 
-	// ErrUnsupportedCoding reports a transfer coding with no decoder.
-	ErrUnsupportedCoding = errors.New("http1: transfer coding has no decoder")
+	// errUnsupportedCoding reports a transfer coding with no decoder.
+	errUnsupportedCoding = errors.New("http1: transfer coding has no decoder")
 )
 
 // decode returns framed with codings removed. Codings are listed in the order
@@ -23,8 +23,8 @@ var (
 // are decoded in reverse. Each decoder is created on the first Read, so decode
 // reads nothing. Decoded data over maxBytes returns ErrBodyTooLarge; a negative
 // maxBytes is treated as zero. Malformed, truncated, or trailing encoded data
-// within a complete body returns ErrInvalidCoding, a coding without a decoder
-// returns ErrUnsupportedCoding, and errors from framed, such as
+// within a complete body returns errInvalidCoding, a coding without a decoder
+// returns errUnsupportedCoding, and errors from framed, such as
 // io.ErrUnexpectedEOF for an incomplete body, pass through. Errors are sticky.
 // Close closes framed. Without codings, framed is returned unchanged.
 func decode(framed io.ReadCloser, codings []string, maxBytes int64) io.ReadCloser {
@@ -60,13 +60,13 @@ func (decoded *decodedReader) Read(buffer []byte) (int, error) {
 	if decoded.decoder == nil {
 		entry, found := decoders[decoded.coding]
 		if !found {
-			decoded.err = fmt.Errorf("%w: %q", ErrUnsupportedCoding, decoded.coding)
+			decoded.err = fmt.Errorf("%w: %q", errUnsupportedCoding, decoded.coding)
 			return 0, decoded.err
 		}
 		decoded.entry = entry
 		decoder, err := entry.open(decoded.source)
 		if errors.Is(err, io.EOF) {
-			err = fmt.Errorf("%w: %s: empty stream", ErrInvalidCoding, decoded.coding)
+			err = fmt.Errorf("%w: %s: empty stream", errInvalidCoding, decoded.coding)
 		}
 		if err != nil {
 			decoded.err = decoded.classify(err)
@@ -91,7 +91,7 @@ func (decoded *decodedReader) checkStreamEnd() error {
 	_, err := decoded.source.Peek(1)
 	switch {
 	case err == nil:
-		return fmt.Errorf("%w: %s: data after the end of the stream", ErrInvalidCoding, decoded.coding)
+		return fmt.Errorf("%w: %s: data after the end of the stream", errInvalidCoding, decoded.coding)
 	case errors.Is(err, io.EOF):
 		return io.EOF
 	}
@@ -99,15 +99,15 @@ func (decoded *decodedReader) checkStreamEnd() error {
 	return err
 }
 
-// classify marks the decoder's format errors as ErrInvalidCoding, as well as
+// classify marks the decoder's format errors as errInvalidCoding, as well as
 // io.ErrUnexpectedEOF when the input ended cleanly, since the stream was then
 // cut short inside a complete body. io.EOF and other errors pass through.
 func (decoded *decodedReader) classify(err error) error {
 	truncated := errors.Is(err, io.ErrUnexpectedEOF) && decoded.input.ended
 	if decoded.entry.isFormatError(err) || truncated {
 		// The cause is formatted, not wrapped, so the error matches only
-		// ErrInvalidCoding and never reads as an incomplete body.
-		return fmt.Errorf("%w: %s: %v", ErrInvalidCoding, decoded.coding, err)
+		// errInvalidCoding and never reads as an incomplete body.
+		return fmt.Errorf("%w: %s: %v", errInvalidCoding, decoded.coding, err)
 	}
 
 	return err

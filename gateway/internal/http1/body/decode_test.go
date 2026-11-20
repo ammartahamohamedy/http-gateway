@@ -97,7 +97,7 @@ func TestDecodeRejectsMalformedGzip(t *testing.T) {
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := decodeAll(test.encoded, []string{"gzip"}, decodeTestLimit)
-			require.ErrorIs(t, err, ErrInvalidCoding)
+			require.ErrorIs(t, err, errInvalidCoding)
 		})
 	}
 }
@@ -107,14 +107,14 @@ func TestDecodeTruncatedGzip(t *testing.T) {
 	for cut := range slices.Values([]int{5, len(encoded) / 2, len(encoded) - 1}) {
 		// A complete body holding a cut stream is malformed.
 		_, err := decodeAll(encoded[:cut], []string{"gzip"}, decodeTestLimit)
-		require.ErrorIs(t, err, ErrInvalidCoding, "cut at %d", cut)
+		require.ErrorIs(t, err, errInvalidCoding, "cut at %d", cut)
 		require.NotErrorIs(t, err, io.ErrUnexpectedEOF, "cut at %d", cut)
 
 		// A body cut by the connection is incomplete.
 		framed := newFixedReader(bytes.NewReader(encoded[:cut]), int64(len(encoded)))
 		_, err = io.ReadAll(decode(framed, []string{"gzip"}, decodeTestLimit))
 		require.ErrorIs(t, err, io.ErrUnexpectedEOF, "cut at %d", cut)
-		require.NotErrorIs(t, err, ErrInvalidCoding, "cut at %d", cut)
+		require.NotErrorIs(t, err, errInvalidCoding, "cut at %d", cut)
 	}
 }
 
@@ -136,7 +136,7 @@ func TestDecodeLimitsDecodedData(t *testing.T) {
 
 func TestDecodeUnsupportedCoding(t *testing.T) {
 	_, err := decodeAll([]byte("data"), []string{"compress"}, decodeTestLimit)
-	require.ErrorIs(t, err, ErrUnsupportedCoding)
+	require.ErrorIs(t, err, errUnsupportedCoding)
 }
 
 // countingReader counts reads from its source.
@@ -167,14 +167,14 @@ func TestDecodePassesSourceErrors(t *testing.T) {
 	source := io.MultiReader(bytes.NewReader(encoded[:20]), iotest.ErrReader(errSource))
 	_, err := io.ReadAll(decode(newFixedReader(source, int64(len(encoded))), []string{"gzip"}, decodeTestLimit))
 	require.ErrorIs(t, err, errSource)
-	require.NotErrorIs(t, err, ErrInvalidCoding)
+	require.NotErrorIs(t, err, errInvalidCoding)
 }
 
 func TestDecodeErrorsAreSticky(t *testing.T) {
 	decoded := decode(framedBytes([]byte("not gzip")), []string{"gzip"}, decodeTestLimit)
 	for range 2 {
 		_, err := decoded.Read(make([]byte, 8))
-		require.ErrorIs(t, err, ErrInvalidCoding)
+		require.ErrorIs(t, err, errInvalidCoding)
 	}
 }
 
@@ -195,7 +195,7 @@ func TestDecodeClose(t *testing.T) {
 	require.NoError(t, decoded.Close())
 	require.True(t, framed.closed)
 	_, err := decoded.Read(make([]byte, 5))
-	require.ErrorIs(t, err, ErrBodyClosed)
+	require.ErrorIs(t, err, errBodyClosed)
 }
 
 func zlibBytes(t *testing.T, data []byte) []byte {
@@ -229,7 +229,7 @@ func TestDecodeAppliesCodingsInReverse(t *testing.T) {
 	require.Equal(t, "hello", content)
 
 	_, err = decodeAll(encoded, []string{"deflate", "gzip"}, decodeTestLimit)
-	require.ErrorIs(t, err, ErrInvalidCoding, "a wrong declared order must fail")
+	require.ErrorIs(t, err, errInvalidCoding, "a wrong declared order must fail")
 }
 
 func TestDecodeRejectsMalformedDeflate(t *testing.T) {
@@ -258,7 +258,7 @@ func TestDecodeRejectsMalformedDeflate(t *testing.T) {
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
 			_, err := decodeAll(test.encoded, []string{"deflate"}, decodeTestLimit)
-			require.ErrorIs(t, err, ErrInvalidCoding)
+			require.ErrorIs(t, err, errInvalidCoding)
 			require.NotErrorIs(t, err, io.ErrUnexpectedEOF)
 		})
 	}

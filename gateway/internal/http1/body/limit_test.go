@@ -62,5 +62,5 @@ func TestLimitedBodyClose(t *testing.T) {
 	require.NoError(t, reader.Close())
 	require.True(t, closer.closed)
 	_, err := reader.Read(make([]byte, 5))
-	require.ErrorIs(t, err, ErrBodyClosed)
+	require.ErrorIs(t, err, errBodyClosed)
 }

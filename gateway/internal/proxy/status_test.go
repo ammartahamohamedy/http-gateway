@@ -44,7 +44,7 @@ func TestRequestErrorStatus(t *testing.T) {
 		{"refused expectation", fields.ErrUnsupportedExpectation, 417},
 		{"unsupported transfer coding", fields.ErrUnsupportedTransferCoding, 501},
 		{"unknown transfer coding", fields.ErrUnknownTransferCoding, 501},
-		{"CONNECT", ErrUnsupportedTargetForm, 501},
+		{"CONNECT", errUnsupportedTargetForm, 501},
 		{"TRACE", errUnsupportedMethod, 501},
 		{"unsupported HTTP version", staged(http1.StageRequestLine, fmt.Errorf("%w %q", http1.ErrUnsupportedVersion, "HTTP/2.0")), 505},
 		{"malformed HTTP version", staged(http1.StageRequestLine, errors.New("http1: invalid HTTP version")), 400},
@@ -52,8 +52,8 @@ func TestRequestErrorStatus(t *testing.T) {
 		{"invalid field", staged(http1.StageFields, &http1.FieldError{Name: "Host", Err: fields.ErrInvalidHost}), 400},
 		{"framing conflict", staged(http1.StageFields, &http1.FieldError{Name: "Transfer-Encoding", Err: fields.ErrFramingConflict}), 400},
 		{"malformed chunked body", body.ErrInvalidFraming, 400},
-		{"ambiguous path", ErrAmbiguousPath, 400},
-		{"unsupported scheme", ErrUnsupportedScheme, 400},
+		{"ambiguous path", errAmbiguousPath, 400},
+		{"unsupported scheme", errUnsupportedScheme, 400},
 	}
 
 	for test := range slices.Values(tests) {

@@ -11,17 +11,17 @@ import (
 )
 
 var (
-	// ErrUnsupportedTargetForm reports authority-form (CONNECT); tunnels are
+	// errUnsupportedTargetForm reports authority-form (CONNECT); tunnels are
 	// outside the first release.
-	ErrUnsupportedTargetForm = errors.New("proxy: CONNECT tunnels are not supported")
-	// ErrUnsupportedScheme reports an absolute-form target whose scheme is not
+	errUnsupportedTargetForm = errors.New("proxy: CONNECT tunnels are not supported")
+	// errUnsupportedScheme reports an absolute-form target whose scheme is not
 	// http or https, including "host:port" parsed as a scheme.
-	ErrUnsupportedScheme = errors.New("proxy: absolute-form target requires an http or https scheme")
-	// ErrInvalidPort reports an authority port outside 1 through 65535.
-	ErrInvalidPort = errors.New("proxy: authority port must be between 1 and 65535")
-	// ErrAmbiguousPath reports a path a backend could resolve differently from
+	errUnsupportedScheme = errors.New("proxy: absolute-form target requires an http or https scheme")
+	// errInvalidPort reports an authority port outside 1 through 65535.
+	errInvalidPort = errors.New("proxy: authority port must be between 1 and 65535")
+	// errAmbiguousPath reports a path a backend could resolve differently from
 	// the gateway: a leading "//" or a dot-segment, literal or percent-encoded.
-	ErrAmbiguousPath = errors.New("proxy: request path contains an empty leading segment or dot-segment")
+	errAmbiguousPath = errors.New("proxy: request path contains an empty leading segment or dot-segment")
 )
 
 // checkRequestTarget applies gateway policy to a request accepted by
@@ -35,7 +35,7 @@ func checkRequestTarget(message *request.Message) error {
 
 	switch message.Line.TargetForm() {
 	case request.AuthorityForm:
-		return ErrUnsupportedTargetForm
+		return errUnsupportedTargetForm
 	case request.AsteriskForm:
 		return checkPort(message.Fields.Authority)
 	case request.OriginForm:
@@ -43,7 +43,7 @@ func checkRequestTarget(message *request.Message) error {
 	case request.AbsoluteForm:
 		scheme, _, _ := strings.Cut(target, ":")
 		if !strings.EqualFold(scheme, "http") && !strings.EqualFold(scheme, "https") {
-			return ErrUnsupportedScheme
+			return errUnsupportedScheme
 		}
 		path = originForm(target)
 	}
@@ -89,7 +89,7 @@ func checkPort(authority string) error {
 
 	value, err := strconv.Atoi(port)
 	if err != nil || value < 1 || value > 65535 {
-		return ErrInvalidPort
+		return errInvalidPort
 	}
 
 	return nil
@@ -100,13 +100,13 @@ func checkPort(authority string) error {
 func checkPath(path string) error {
 	path = strings.SplitN(path, "?", 2)[0]
 	if strings.HasPrefix(path, "//") {
-		return ErrAmbiguousPath
+		return errAmbiguousPath
 	}
 
 	for segment := range strings.SplitSeq(path, "/") {
 		switch strings.ReplaceAll(strings.ToLower(segment), "%2e", ".") {
 		case ".", "..":
-			return ErrAmbiguousPath
+			return errAmbiguousPath
 		}
 	}
 

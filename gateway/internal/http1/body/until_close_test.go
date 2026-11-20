@@ -62,7 +62,7 @@ func TestUntilCloseReaderClose(t *testing.T) {
 	require.NoError(t, reader.Close())
 
 	_, err = reader.Read(buffer)
-	require.ErrorIs(t, err, ErrBodyClosed)
+	require.ErrorIs(t, err, errBodyClosed)
 
 	rest, err := io.ReadAll(source)
 	require.NoError(t, err)

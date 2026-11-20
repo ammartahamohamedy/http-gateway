@@ -31,7 +31,7 @@ func TestFramingRequests(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			mode, err := Framing(test.msg)
+			mode, err := framing(test.msg)
 			require.NoError(t, err)
 			require.Equal(t, test.want, mode)
 		})
@@ -88,7 +88,7 @@ func TestFramingResponses(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			mode, err := Framing(test.msg)
+			mode, err := framing(test.msg)
 			require.NoError(t, err)
 			require.Equal(t, test.want, mode)
 		})
@@ -119,7 +119,7 @@ func TestFramingErrors(t *testing.T) {
 
 	for test := range slices.Values(tests) {
 		t.Run(test.name, func(t *testing.T) {
-			mode, err := Framing(test.msg)
+			mode, err := framing(test.msg)
 			require.ErrorIs(t, err, test.want)
 			require.Equal(t, Unknown, mode)
 		})
@@ -128,7 +128,7 @@ func TestFramingErrors(t *testing.T) {
 
 func TestFramingKeepsInput(t *testing.T) {
 	codings := []string{"gzip", "chunked"}
-	_, err := Framing(Message{Version: "1.1", TransferCodings: codings})
+	_, err := framing(Message{Version: "1.1", TransferCodings: codings})
 	require.NoError(t, err)
 	require.Equal(t, []string{"gzip", "chunked"}, codings)
 }

@@ -117,6 +117,6 @@ func TestFixedReaderClose(t *testing.T) {
 	require.NoError(t, reader.Close())
 	count, err := reader.Read(make([]byte, 5))
 	require.Zero(t, count)
-	require.ErrorIs(t, err, ErrBodyClosed)
+	require.ErrorIs(t, err, errBodyClosed)
 	require.Equal(t, 5, source.Len(), "Close must not drain the source")
 }

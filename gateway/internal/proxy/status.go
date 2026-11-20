@@ -46,7 +46,7 @@ func requestErrorStatus(err error) int {
 	case errors.Is(err, fields.ErrUnsupportedExpectation):
 		return 417
 	case errors.Is(err, fields.ErrUnsupportedTransferCoding), errors.Is(err, fields.ErrUnknownTransferCoding),
-		errors.Is(err, ErrUnsupportedTargetForm), errors.Is(err, errUnsupportedMethod):
+		errors.Is(err, errUnsupportedTargetForm), errors.Is(err, errUnsupportedMethod):
 		return 501
 	case errors.Is(err, http1.ErrUnsupportedVersion):
 		return 505

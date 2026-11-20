@@ -193,8 +193,8 @@ func TestAdmitRequest(t *testing.T) {
 		{"admitted", "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", nil},
 		{"TRACE", "TRACE / HTTP/1.1\r\nHost: example.com\r\n\r\n", errUnsupportedMethod},
 		{"undecodable transfer coding", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: compress, chunked\r\n\r\n0\r\n\r\n", fields.ErrUnsupportedTransferCoding},
-		{"CONNECT tunnel", "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n", ErrUnsupportedTargetForm},
-		{"ambiguous path", "GET /a/../b HTTP/1.1\r\nHost: example.com\r\n\r\n", ErrAmbiguousPath},
+		{"CONNECT tunnel", "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n", errUnsupportedTargetForm},
+		{"ambiguous path", "GET /a/../b HTTP/1.1\r\nHost: example.com\r\n\r\n", errAmbiguousPath},
 		{"unsupported expectation", "GET / HTTP/1.1\r\nHost: example.com\r\nExpect: something\r\n\r\n", fields.ErrUnsupportedExpectation},
 		{"first refusal wins", "POST /a/../b HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: compress, chunked\r\nExpect: something\r\n\r\n0\r\n\r\n", fields.ErrUnsupportedTransferCoding},
 	}

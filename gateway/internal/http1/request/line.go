@@ -15,9 +15,9 @@ var (
 	// content, excluding CRLF, exceeds maxLineBytes.
 	ErrLineTooLong = errors.New("http1: request line exceeds 8192 bytes")
 
-	// ErrTooManyLeadingEmptyLines is returned by Read when more than
+	// errTooManyLeadingEmptyLines is returned by Read when more than
 	// maxLeadingEmptyLines empty lines precede the request-line.
-	ErrTooManyLeadingEmptyLines = errors.New("http1: too many empty lines before request line")
+	errTooManyLeadingEmptyLines = errors.New("http1: too many empty lines before request line")
 )
 
 // Line contains the method, request-target, and HTTP version number
@@ -47,7 +47,7 @@ func readLine(reader *bufio.Reader) (Line, error) {
 		return parseLine(rawLine)
 	}
 
-	return Line{}, ErrTooManyLeadingEmptyLines
+	return Line{}, errTooManyLeadingEmptyLines
 }
 
 // parseLine parses line contents without a CRLF terminator. It requires

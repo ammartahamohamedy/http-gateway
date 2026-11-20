@@ -53,13 +53,13 @@ func TestReadLeadingEmptyLines(t *testing.T) {
 
 	overLimit := strings.Repeat("\r\n", maxLeadingEmptyLines+1) + message
 	request, err = Read(bufio.NewReader(strings.NewReader(overLimit)))
-	require.ErrorIs(t, err, ErrTooManyLeadingEmptyLines)
+	require.ErrorIs(t, err, errTooManyLeadingEmptyLines)
 	require.Nil(t, request)
 
 	// A client sending only CRLFs is refused, not read forever.
 	endless := strings.NewReader(strings.Repeat("\r\n", 1000))
 	_, err = Read(bufio.NewReader(endless))
-	require.ErrorIs(t, err, ErrTooManyLeadingEmptyLines)
+	require.ErrorIs(t, err, errTooManyLeadingEmptyLines)
 }
 
 func TestRead(t *testing.T) {
