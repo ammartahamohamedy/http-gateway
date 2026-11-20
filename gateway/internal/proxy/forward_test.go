@@ -201,17 +201,19 @@ func TestForwardHEAD(t *testing.T) {
 	require.True(t, strings.HasSuffix(output, "\r\n\r\n"), "a HEAD response ends with its head")
 }
 
-func TestForwardKeepsRequestTrailers(t *testing.T) {
+func TestForwardFiltersRequestTrailers(t *testing.T) {
 	upstream, requests := fakeUpstream(t, replyWith("HTTP/1.1 204 No Content\r\n\r\n"))
 
-	raw := "POST /documents HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\nTrailer: X-Checksum\r\n\r\n" +
-		"5\r\nhello\r\n0\r\nX-Checksum: abc\r\n\r\n"
+	raw := "POST /documents HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n" +
+		"Connection: X-Debug\r\nTrailer: X-Debug, X-Checksum\r\n\r\n" +
+		"5\r\nhello\r\n0\r\nX-Debug: local\r\nX-Checksum: abc\r\n\r\n"
 
 	_, _, err := runForward(t, raw, upstream)
 	require.NoError(t, err)
 
 	sent := <-requests
 	require.Equal(t, "hello", string(sent.content))
+	require.Equal(t, []string{"x-checksum"}, sent.message.Headers.Values("Trailer"))
 	require.Equal(t, header.Section{"x-checksum": {"abc"}}, sent.message.Trailers)
 }
 

@@ -30,13 +30,13 @@ var (
 )
 
 // prepareRequest turns message, whose body was buffered as content, into the
-// request sent to upstream, in place. It drops the hop-by-hop fields, the
-// forwarding metadata, and Expect, since the gateway already answered any
-// expectation itself; sets Host to upstream; appends gatewayVia; and asks for
-// Connection: close, since every exchange uses its own connection. An
+// request sent to upstream, in place. It drops the hop-by-hop fields,
+// client-supplied forwarding metadata, and Proxy-Authorization. It removes
+// Expect after handling the expectation, sets Host to upstream, appends
+// gatewayVia, and sets Connection: close for the new connection. An
 // absolute-form target becomes origin-form. The body becomes content, declared
-// with its length unless the client sent no body; trailers stay, so request.Write
-// frames them.
+// with its length unless the client sent no body. It removes hop-by-hop
+// trailers before request.Write frames the remaining fields.
 func prepareRequest(message *request.Message, content []byte, upstream string) {
 	headers := withoutHopByHop(message.Headers, message.Fields.ConnectionOptions)
 
@@ -45,10 +45,14 @@ func prepareRequest(message *request.Message, content []byte, upstream string) {
 	}
 
 	delete(headers, "expect")
+	delete(headers, "proxy-authorization")
 	headers["host"] = []string{upstream}
 	headers["via"] = append(slices.Clone(headers["via"]), gatewayVia)
 	headers["connection"] = []string{"close"}
 	message.Headers = headers
+	if len(message.Trailers) > 0 {
+		message.Trailers = withoutHopByHop(message.Trailers, message.Fields.ConnectionOptions)
+	}
 
 	if message.Line.TargetForm() == request.AbsoluteForm {
 		message.Line.RequestTarget = originForm(message.Line.RequestTarget)
@@ -88,10 +92,10 @@ func prepareResponse(message *response.Message) error {
 	return nil
 }
 
-// withoutHopByHop returns a copy of headers without hopByHopFields and the
+// withoutHopByHop returns a copy of a field section without hopByHopFields and the
 // fields that options, lowercase Connection options, nominate.
-func withoutHopByHop(headers header.Section, options []string) header.Section {
-	section := maps.Clone(headers)
+func withoutHopByHop(received header.Section, options []string) header.Section {
+	section := maps.Clone(received)
 	if section == nil {
 		section = make(header.Section)
 	}

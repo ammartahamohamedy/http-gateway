@@ -34,6 +34,7 @@ func TestPrepareRequest(t *testing.T) {
 		"Connection: keep-alive, x-secret\r\nKeep-Alive: timeout=5\r\nX-Secret: s\r\nProxy-Connection: keep-alive\r\n"+
 		"TE: trailers\r\nUpgrade: websocket\r\nExpect: 100-continue\r\nForwarded: for=192.0.2.1\r\n"+
 		"X-Forwarded-For: 192.0.2.1\r\nX-Forwarded-Host: a\r\nX-Forwarded-Proto: https\r\nVia: 1.0 edge\r\n"+
+		"Proxy-Authorization: Basic cHJveHk6c2VjcmV0\r\nAuthorization: Bearer origin-token\r\n"+
 		"Accept: application/json\r\n\r\nhello")
 	received := message.Headers
 
@@ -43,6 +44,7 @@ func TestPrepareRequest(t *testing.T) {
 		"host":           {"backend:8081"},
 		"content-length": {"5"},
 		"accept":         {"application/json"},
+		"authorization":  {"Bearer origin-token"},
 		"via":            {"1.0 edge", gatewayVia},
 		"connection":     {"close"},
 	}, message.Headers)
