@@ -52,7 +52,9 @@ func readLine(reader *bufio.Reader) (Line, error) {
 
 // parseLine parses line contents without a CRLF terminator. It requires
 // exactly three nonempty components separated by single spaces and a version
-// that http1.ParseVersion processes as 1.1; HTTP/1.0 is rejected as local policy.
+// that http1.ParseVersion processes as 1.1; HTTP/1.0 is rejected as local policy
+// with http1.ErrUnsupportedVersion. The version is checked before the method and
+// request-target, since it decides the rules they are read by.
 // Method case and request-target encoding are preserved. It does not check
 // whether a method is implemented by the server. This function does not enforce
 // a size limit; Read applies the input limit before calling it. Direct
@@ -73,21 +75,21 @@ func parseLine(rawLine string) (Line, error) {
 		)
 	}
 
-	if !grammar.IsToken(method) {
-		return Line{}, fmt.Errorf("http1: invalid method %q", method)
-	}
-
-	if err := validateTarget(method, requestTarget); err != nil {
-		return Line{}, err
-	}
-
 	versionNumber, err := http1.ParseVersion(version)
 	if err != nil {
 		return Line{}, err
 	}
 
 	if versionNumber != "1.1" {
-		return Line{}, fmt.Errorf("http1: unsupported HTTP version %q", version)
+		return Line{}, fmt.Errorf("%w %q", http1.ErrUnsupportedVersion, version)
+	}
+
+	if !grammar.IsToken(method) {
+		return Line{}, fmt.Errorf("http1: invalid method %q", method)
+	}
+
+	if err := validateTarget(method, requestTarget); err != nil {
+		return Line{}, err
 	}
 
 	return Line{

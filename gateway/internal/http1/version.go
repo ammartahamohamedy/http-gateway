@@ -4,9 +4,14 @@
 package http1
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 )
+
+// ErrUnsupportedVersion reports a well-formed HTTP version that is not
+// processed: another major, or HTTP/1.0 where local policy refuses it.
+var ErrUnsupportedVersion = errors.New("http1: unsupported HTTP version")
 
 // httpVersionPattern matches the complete HTTP/<digit>.<digit> token.
 // Whether that version is supported is checked separately.
@@ -15,8 +20,8 @@ var httpVersionPattern = regexp.MustCompile(`\AHTTP/[0-9]\.[0-9]\z`)
 // ParseVersion validates an HTTP version token and returns the version to
 // process the message as: "1.0", or "1.1" for HTTP/1.1 and higher HTTP/1 minors
 // (RFC 9110, Section 6.2). Other majors are unsupported; callers decide whether
-// 1.0 is allowed. Malformed and unsupported versions return different messages,
-// without sentinels, and an empty version.
+// 1.0 is allowed. Another major returns ErrUnsupportedVersion; a malformed token
+// returns a different error. Both return an empty version.
 func ParseVersion(rawVersion string) (string, error) {
 	if !httpVersionPattern.MatchString(rawVersion) {
 		return "", fmt.Errorf("http1: invalid HTTP version %q", rawVersion)
@@ -24,7 +29,7 @@ func ParseVersion(rawVersion string) (string, error) {
 
 	major, minor := rawVersion[len("HTTP/")], rawVersion[len("HTTP/1.")]
 	if major != '1' {
-		return "", fmt.Errorf("http1: unsupported HTTP version %q", rawVersion)
+		return "", fmt.Errorf("%w %q", ErrUnsupportedVersion, rawVersion)
 	}
 
 	if minor == '0' {

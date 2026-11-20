@@ -184,3 +184,12 @@ func TestReadLineReturnsParseErrorsUnchanged(t *testing.T) {
 	_, err := readLine(bufio.NewReader(strings.NewReader("HTTP/1.0 200 OK\r\n")))
 	require.EqualError(t, err, parseErr.Error())
 }
+
+func TestParseLineUnsupportedVersionsMatchTheSentinel(t *testing.T) {
+	for rawLine := range slices.Values([]string{"HTTP/1.0 200 OK", "HTTP/2.0 200 OK"}) {
+		t.Run(rawLine, func(t *testing.T) {
+			_, err := parseLine(rawLine)
+			require.ErrorIs(t, err, http1.ErrUnsupportedVersion)
+		})
+	}
+}

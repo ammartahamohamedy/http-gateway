@@ -55,8 +55,15 @@ func TestParseVersionRejectsUnsupportedVersions(t *testing.T) {
 	for rawVersion := range slices.Values([]string{"HTTP/0.9", "HTTP/2.0", "HTTP/9.9"}) {
 		t.Run(rawVersion, func(t *testing.T) {
 			version, err := ParseVersion(rawVersion)
-			require.ErrorContains(t, err, "unsupported HTTP version")
+			require.ErrorIs(t, err, ErrUnsupportedVersion)
+			require.ErrorContains(t, err, rawVersion)
 			require.Empty(t, version)
 		})
 	}
+}
+
+func TestParseVersionMalformedIsNotUnsupported(t *testing.T) {
+	_, err := ParseVersion("HTTP/2")
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrUnsupportedVersion)
 }

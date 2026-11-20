@@ -35,6 +35,11 @@ type Fields struct {
 	// Expectations holds the members from fields.ParseExpect; nil when absent.
 	Expectations []string
 
+	// MaxForwards is meaningful only when MaxForwardsPresent is true. Both are
+	// set only for OPTIONS and TRACE, the methods Max-Forwards applies to.
+	MaxForwards        int64
+	MaxForwardsPresent bool
+
 	// Origin is the value from fields.ParseOrigin, or empty when absent.
 	Origin string
 
@@ -73,6 +78,7 @@ var fieldRules = []fieldRule{
 	{name: "Trailer", apply: applyTrailerRule},
 	{name: "Connection", apply: applyConnectionRule},
 	{name: "Expect", apply: applyExpectRule},
+	{name: "Max-Forwards", apply: applyMaxForwardsRule},
 	{name: "Content-Type", apply: applyContentTypeRule},
 	{name: "Accept", apply: applyAcceptRule},
 	{name: "Content-Encoding", apply: applyContentEncodingRule},

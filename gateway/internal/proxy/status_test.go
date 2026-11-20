@@ -31,6 +31,8 @@ func TestRequestErrorStatus(t *testing.T) {
 	}{
 		{"nothing sent", staged(http1.StageRequestLine, fmt.Errorf("reading: %w", io.EOF)), 0},
 		{"client left mid-request", staged(http1.StageHeaders, io.ErrUnexpectedEOF), 0},
+		{"connection reset", staged(http1.StageHeaders, fmt.Errorf("reading: %w", &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET})), 0},
+		{"connection reset mid-body", fmt.Errorf("reading body: %w", &net.OpError{Op: "read", Net: "tcp", Err: syscall.ECONNRESET}), 0},
 		{"head timeout", staged(http1.StageHeaders, fmt.Errorf("reading: %w", os.ErrDeadlineExceeded)), 408},
 		{"body timeout", fmt.Errorf("reading body: %w", os.ErrDeadlineExceeded), 408},
 		{"declared body too large", staged(http1.StageBody, body.ErrBodyTooLarge), 413},
@@ -43,6 +45,9 @@ func TestRequestErrorStatus(t *testing.T) {
 		{"unsupported transfer coding", fields.ErrUnsupportedTransferCoding, 501},
 		{"unknown transfer coding", fields.ErrUnknownTransferCoding, 501},
 		{"CONNECT", ErrUnsupportedTargetForm, 501},
+		{"TRACE", errUnsupportedMethod, 501},
+		{"unsupported HTTP version", staged(http1.StageRequestLine, fmt.Errorf("%w %q", http1.ErrUnsupportedVersion, "HTTP/2.0")), 505},
+		{"malformed HTTP version", staged(http1.StageRequestLine, errors.New("http1: invalid HTTP version")), 400},
 		{"malformed request-line", staged(http1.StageRequestLine, errors.New("http1: invalid method")), 400},
 		{"invalid field", staged(http1.StageFields, &http1.FieldError{Name: "Host", Err: fields.ErrInvalidHost}), 400},
 		{"framing conflict", staged(http1.StageFields, &http1.FieldError{Name: "Transfer-Encoding", Err: fields.ErrFramingConflict}), 400},
@@ -65,12 +70,12 @@ func TestUpstreamErrorStatus(t *testing.T) {
 	require.Equal(t, 502, upstreamErrorStatus(io.ErrUnexpectedEOF))
 }
 
-func TestWriteErrorResponse(t *testing.T) {
+func TestWriteGatewayResponse(t *testing.T) {
 	for method := range slices.Values([]string{"", "GET", "HEAD"}) {
 		client, server := net.Pipe()
 
 		go func() {
-			writeErrorResponse(server, 502, method)
+			writeGatewayResponse(server, 502, method)
 			_ = server.Close()
 		}()
 
@@ -88,10 +93,10 @@ func TestWriteErrorResponse(t *testing.T) {
 	}
 }
 
-func TestWriteErrorResponseToAClosedClient(t *testing.T) {
+func TestWriteGatewayResponseToAClosedClient(t *testing.T) {
 	client, server := net.Pipe()
 	require.NoError(t, client.Close())
 	require.NoError(t, server.Close())
 
-	writeErrorResponse(server, 400, "GET")
+	writeGatewayResponse(server, 400, "GET")
 }

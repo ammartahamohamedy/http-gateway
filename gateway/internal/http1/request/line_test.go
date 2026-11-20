@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -111,4 +112,29 @@ func TestParseLineDoesNotEnforceReadLimit(t *testing.T) {
 	line, err := parseLine("GET " + requestTarget + " HTTP/1.1")
 	require.NoError(t, err)
 	require.Equal(t, Line{Method: "GET", RequestTarget: requestTarget, Version: "1.1"}, line)
+}
+
+func TestParseLineUnsupportedVersions(t *testing.T) {
+	tests := []struct {
+		name    string
+		rawLine string
+	}{
+		{"HTTP/1.0 by local policy", "GET / HTTP/1.0"},
+		{"another major", "GET / HTTP/2.0"},
+		{"version checked before the target", "PRI * HTTP/2.0"},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			line, err := parseLine(test.rawLine)
+			require.ErrorIs(t, err, http1.ErrUnsupportedVersion)
+			require.Equal(t, Line{}, line)
+		})
+	}
+}
+
+func TestParseLineMalformedVersionIsNotUnsupported(t *testing.T) {
+	_, err := parseLine("GET / http/1.1")
+	require.Error(t, err)
+	require.NotErrorIs(t, err, http1.ErrUnsupportedVersion)
 }

@@ -23,7 +23,7 @@ func TestFieldRulesOrder(t *testing.T) {
 
 	require.Equal(t, []string{
 		"Host", "Content-Length", "Transfer-Encoding", "Trailer", "Connection", "Expect",
-		"Content-Type", "Accept", "Content-Encoding", "Accept-Encoding",
+		"Max-Forwards", "Content-Type", "Accept", "Content-Encoding", "Accept-Encoding",
 		"Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers",
 	}, names)
 }
@@ -408,4 +408,45 @@ func TestTrailerField(t *testing.T) {
 			require.Equal(t, "Trailer", fieldErr.Name)
 		})
 	}
+}
+
+func TestMaxForwardsField(t *testing.T) {
+	tests := []struct {
+		name        string
+		method      string
+		values      []string
+		wantValue   int64
+		wantPresent bool
+	}{
+		{"OPTIONS", "OPTIONS", []string{"3"}, 3, true},
+		{"OPTIONS zero", "OPTIONS", []string{"0"}, 0, true},
+		{"TRACE", "TRACE", []string{"7"}, 7, true},
+		{"OPTIONS absent", "OPTIONS", nil, 0, false},
+		{"other methods ignore it", "GET", []string{"3"}, 0, false},
+		{"other methods ignore an invalid value", "GET", []string{"x"}, 0, false},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			headers := header.Section{"host": {"example.com"}}
+			if test.values != nil {
+				headers["max-forwards"] = test.values
+			}
+
+			parsed, err := processFields(Line{Method: test.method, RequestTarget: "/", Version: "1.1"}, headers)
+			require.NoError(t, err)
+			require.Equal(t, test.wantValue, parsed.MaxForwards)
+			require.Equal(t, test.wantPresent, parsed.MaxForwardsPresent)
+		})
+	}
+}
+
+func TestMaxForwardsErrors(t *testing.T) {
+	headers := header.Section{"host": {"example.com"}, "max-forwards": {"-1"}}
+	parsed, err := processFields(Line{Method: "OPTIONS", RequestTarget: "/", Version: "1.1"}, headers)
+	require.ErrorIs(t, err, fields.ErrInvalidMaxForwards)
+	require.Zero(t, parsed)
+	var fieldErr *http1.FieldError
+	require.ErrorAs(t, err, &fieldErr)
+	require.Equal(t, "Max-Forwards", fieldErr.Name)
 }

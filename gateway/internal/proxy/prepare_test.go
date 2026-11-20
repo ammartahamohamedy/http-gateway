@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"io"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -152,4 +153,25 @@ func TestPrepareResponseRefusesAnInvalidConnectionList(t *testing.T) {
 
 	require.ErrorIs(t, prepareResponse(message), fields.ErrInvalidConnection)
 	require.Equal(t, header.Section{"connection": {"a/b"}}, message.Headers)
+}
+
+func TestPrepareRequestMaxForwards(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want []string
+	}{
+		{"decremented on OPTIONS", "OPTIONS / HTTP/1.1\r\nHost: a\r\nMax-Forwards: 5\r\n\r\n", []string{"4"}},
+		{"decremented on the largest value", "OPTIONS / HTTP/1.1\r\nHost: a\r\nMax-Forwards: 99999999999999999999\r\n\r\n", []string{"9223372036854775806"}},
+		{"forwarded unchanged on other methods", "GET / HTTP/1.1\r\nHost: a\r\nMax-Forwards: 5\r\n\r\n", []string{"5"}},
+		{"absent", "OPTIONS / HTTP/1.1\r\nHost: a\r\n\r\n", nil},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			message, content := readRequest(t, test.raw)
+			prepareRequest(message, content, "backend:8081")
+			require.Equal(t, test.want, message.Headers.Values("Max-Forwards"))
+		})
+	}
 }

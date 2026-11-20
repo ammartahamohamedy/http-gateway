@@ -118,7 +118,9 @@ func TestHandleConnectionAnswersRefusedRequests(t *testing.T) {
 		status int
 	}{
 		{"malformed request-line", "GET  / HTTP/1.1\r\nHost: example.com\r\n\r\n", 400},
-		{"HTTP/1.0", "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n", 400},
+		{"HTTP/1.0", "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n", 505},
+		{"another major version", "GET / HTTP/2.0\r\nHost: example.com\r\n\r\n", 505},
+		{"HTTP/2 connection preface", "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n", 505},
 		{"missing Host", "GET / HTTP/1.1\r\n\r\n", 400},
 		{"framing conflict", "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 1\r\nTransfer-Encoding: chunked\r\n\r\n", 400},
 		{"ambiguous path", "GET /a/../b HTTP/1.1\r\nHost: example.com\r\n\r\n", 400},
@@ -128,6 +130,9 @@ func TestHandleConnectionAnswersRefusedRequests(t *testing.T) {
 		{"unsupported expectation", "POST / HTTP/1.1\r\nHost: a\r\nContent-Length: 5\r\nExpect: x-custom\r\n\r\n", 417},
 		{"unsupported transfer coding", "POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: compress, chunked\r\n\r\n", 501},
 		{"CONNECT", "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n", 501},
+		{"TRACE", "TRACE / HTTP/1.1\r\nHost: example.com\r\n\r\n", 501},
+		{"TRACE with Max-Forwards 0", "TRACE / HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: 0\r\n\r\n", 501},
+		{"invalid Max-Forwards on OPTIONS", "OPTIONS / HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: x\r\n\r\n", 400},
 	}
 
 	for test := range slices.Values(tests) {
@@ -186,6 +191,7 @@ func TestAdmitRequest(t *testing.T) {
 		want error
 	}{
 		{"admitted", "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", nil},
+		{"TRACE", "TRACE / HTTP/1.1\r\nHost: example.com\r\n\r\n", errUnsupportedMethod},
 		{"undecodable transfer coding", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: compress, chunked\r\n\r\n0\r\n\r\n", fields.ErrUnsupportedTransferCoding},
 		{"CONNECT tunnel", "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n", ErrUnsupportedTargetForm},
 		{"ambiguous path", "GET /a/../b HTTP/1.1\r\nHost: example.com\r\n\r\n", ErrAmbiguousPath},
@@ -206,4 +212,22 @@ func TestAdmitRequest(t *testing.T) {
 			require.ErrorIs(t, err, test.want)
 		})
 	}
+}
+
+func TestHandleConnectionAnswersExhaustedMaxForwardsItself(t *testing.T) {
+	message, content := exchange(t, "OPTIONS * HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: 0\r\n\r\n",
+		Config{Upstream: unusedAddress(t)})
+	require.Equal(t, 200, message.Line.StatusCode, "answered as the final recipient, never forwarded")
+	require.Equal(t, []string{"0"}, message.Headers.Values("Content-Length"))
+	require.Equal(t, []string{"close"}, message.Headers.Values("Connection"))
+	require.Empty(t, content)
+}
+
+func TestHandleConnectionForwardsDecrementedMaxForwards(t *testing.T) {
+	upstream, requests := fakeUpstream(t, replyWith("HTTP/1.1 204 No Content\r\n\r\n"))
+	message, _ := exchange(t, "OPTIONS / HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: 3\r\n\r\n", Config{Upstream: upstream})
+	require.Equal(t, 204, message.Line.StatusCode)
+
+	sent := <-requests
+	require.Equal(t, []string{"2"}, sent.message.Headers.Values("Max-Forwards"))
 }

@@ -45,7 +45,7 @@ func readLine(reader *bufio.Reader) (Line, error) {
 // HTTP-version SP status-code SP [ reason-phrase ] (RFC 9112, Section 4). The
 // second SP is required even when the reason phrase is empty. The version must
 // be one that http1.ParseVersion processes as 1.1; HTTP/1.0 is rejected as
-// local policy. parseStatusCode checks the status code. The reason phrase may
+// local policy with http1.ErrUnsupportedVersion. parseStatusCode checks the status code. The reason phrase may
 // contain SP and HTAB and is preserved as received. This function does not
 // enforce a size limit; readLine applies it.
 func parseLine(rawLine string) (Line, error) {
@@ -64,7 +64,7 @@ func parseLine(rawLine string) (Line, error) {
 	}
 
 	if version != "1.1" {
-		return Line{}, fmt.Errorf("http1: unsupported HTTP version %q", rawVersion)
+		return Line{}, fmt.Errorf("%w %q", http1.ErrUnsupportedVersion, rawVersion)
 	}
 
 	statusCode, err := parseStatusCode(rawCode)

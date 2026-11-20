@@ -7,6 +7,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/body"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
@@ -18,11 +19,13 @@ import (
 var errorResponseTimeout = 10 * time.Second
 
 // requestErrorStatus returns the status answering a request that failed to read
-// or that gateway policy refused, or 0 when the client ended the connection and
-// no response can be sent. Timeouts get 408, oversized bodies 413, an oversized
-// request-line 414, an oversized header section 431, refused expectations 417,
-// and unsupported transfer codings or CONNECT 501 (RFC 9110, Section 15.5);
-// every other error is a malformed or refused request, 400.
+// or that gateway policy refused, or 0 when no response can be sent: the client
+// ended the connection, or it failed for a reason other than a timeout.
+// Timeouts get 408, oversized bodies 413, an oversized request-line 414, an
+// oversized header section 431, refused expectations 417, unsupported transfer
+// codings, CONNECT, and TRACE 501, and an unsupported HTTP version 505 (RFC
+// 9110, Sections 15.5 and 15.6); every other error is a malformed or refused
+// request, 400.
 func requestErrorStatus(err error) int {
 	netErr, isNetErr := errors.AsType[net.Error](err)
 
@@ -31,6 +34,8 @@ func requestErrorStatus(err error) int {
 		return 0
 	case isNetErr && netErr.Timeout():
 		return 408
+	case isNetErr:
+		return 0
 	case errors.Is(err, body.ErrBodyTooLarge):
 		return 413
 	case errors.Is(err, request.ErrLineTooLong):
@@ -41,8 +46,10 @@ func requestErrorStatus(err error) int {
 	case errors.Is(err, fields.ErrUnsupportedExpectation):
 		return 417
 	case errors.Is(err, fields.ErrUnsupportedTransferCoding), errors.Is(err, fields.ErrUnknownTransferCoding),
-		errors.Is(err, ErrUnsupportedTargetForm):
+		errors.Is(err, ErrUnsupportedTargetForm), errors.Is(err, errUnsupportedMethod):
 		return 501
+	case errors.Is(err, http1.ErrUnsupportedVersion):
+		return 505
 	default:
 		return 400
 	}
@@ -59,12 +66,12 @@ func upstreamErrorStatus(err error) int {
 	return 502
 }
 
-// writeErrorResponse sends the gateway's own response with status to client,
+// writeGatewayResponse sends the gateway's own response with status to client,
 // answering a request sent with requestMethod, empty when unknown. It has no
 // body, so it declares Content-Length: 0 rather than being chunked, and carries
 // Connection: close, since the connection closes after it. A write failure is
 // logged, since nothing else can be done with it.
-func writeErrorResponse(client net.Conn, status int, requestMethod string) {
+func writeGatewayResponse(client net.Conn, status int, requestMethod string) {
 	message := &response.Message{
 		Line: response.Line{Version: "1.1", StatusCode: status},
 		Headers: header.Section{

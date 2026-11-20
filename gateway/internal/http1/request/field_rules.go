@@ -70,6 +70,24 @@ func applyExpectRule(values []string, _ Line, out *Fields) error {
 	return nil
 }
 
+// applyMaxForwardsRule parses Max-Forwards on OPTIONS and TRACE requests. On
+// other methods a recipient may ignore it (RFC 9110, Section 7.6.2), so it is
+// neither validated nor parsed and stays an ordinary field.
+func applyMaxForwardsRule(values []string, line Line, out *Fields) error {
+	if line.Method != "OPTIONS" && line.Method != "TRACE" {
+		return nil
+	}
+
+	remaining, present, err := fields.ParseMaxForwards(values)
+	if err != nil {
+		return err
+	}
+
+	out.MaxForwards = remaining
+	out.MaxForwardsPresent = present
+	return nil
+}
+
 func applyContentTypeRule(values []string, _ Line, _ *Fields) error {
 	return fields.ValidateContentType(values)
 }

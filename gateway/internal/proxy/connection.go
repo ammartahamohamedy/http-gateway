@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"errors"
 	"log"
 	"net"
 	"time"
@@ -9,6 +10,10 @@ import (
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/request"
 )
+
+// errUnsupportedMethod reports TRACE, which the gateway does not implement
+// rather than reflect requests back to clients.
+var errUnsupportedMethod = errors.New("proxy: TRACE is not supported")
 
 // requestHeadTimeout bounds reading the whole request head, so a client sending
 // it slowly cannot hold the connection. A per-line cap alone would not stop that.
@@ -24,12 +29,15 @@ type Config struct {
 // HandleConnection runs one exchange on connection, the client socket it owns.
 // It reads the request head within requestHeadTimeout, applies the gateway's
 // request policy (admitRequest), buffers the body (readRequestBody), and
-// forwards the request to config.Upstream (forward).
+// forwards the request to config.Upstream (forward). A request whose
+// Max-Forwards has reached 0 is answered by the gateway itself as its final
+// recipient, 200 with no content, instead of being forwarded (RFC 9110, Section
+// 7.6.2).
 //
 // A request that fails to read or is refused gets the status
 // requestErrorStatus chooses, and an upstream failure before the final
 // response is committed gets the one upstreamErrorStatus chooses, both written
-// by writeErrorResponse. The connection is closed before returning, and every
+// by writeGatewayResponse. The connection is closed before returning, and every
 // error is logged without terminating the listener.
 func HandleConnection(connection net.Conn, config Config) {
 	defer func() {
@@ -41,7 +49,7 @@ func HandleConnection(connection net.Conn, config Config) {
 	reject := func(err error, requestMethod string) {
 		log.Printf("rejecting request: %v", err)
 		if status := requestErrorStatus(err); status != 0 {
-			writeErrorResponse(connection, status, requestMethod)
+			writeGatewayResponse(connection, status, requestMethod)
 		}
 	}
 
@@ -63,6 +71,11 @@ func HandleConnection(connection net.Conn, config Config) {
 		return
 	}
 
+	if message.Fields.MaxForwardsPresent && message.Fields.MaxForwards == 0 {
+		writeGatewayResponse(connection, 200, requestMethod)
+		return
+	}
+
 	content, err := readRequestBody(connection, message)
 	if err != nil {
 		reject(err, requestMethod)
@@ -73,16 +86,20 @@ func HandleConnection(connection net.Conn, config Config) {
 	if err != nil {
 		log.Printf("forwarding request: %v", err)
 		if !committed {
-			writeErrorResponse(connection, upstreamErrorStatus(err), requestMethod)
+			writeGatewayResponse(connection, upstreamErrorStatus(err), requestMethod)
 		}
 	}
 }
 
-// admitRequest applies the gateway's request policy before the body is read:
-// transfer codings it can decode, a request-target it serves
-// (checkRequestTarget), and expectations it supports. The first refusal is
+// admitRequest applies the gateway's request policy before the body is read: a
+// method it implements, transfer codings it can decode, a request-target it
+// serves (checkRequestTarget), and expectations it supports. The first refusal is
 // returned for requestErrorStatus to answer.
 func admitRequest(message *request.Message) error {
+	if message.Line.Method == "TRACE" {
+		return errUnsupportedMethod
+	}
+
 	if err := fields.CheckTransferCodingSupport(message.Fields.TransferCodings); err != nil {
 		return err
 	}

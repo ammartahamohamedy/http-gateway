@@ -5,6 +5,7 @@ import (
 	"io"
 	"maps"
 	"slices"
+	"strconv"
 	"time"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
@@ -33,10 +34,11 @@ var (
 // request sent to upstream, in place. It drops the hop-by-hop fields,
 // client-supplied forwarding metadata, and Proxy-Authorization. It removes
 // Expect after handling the expectation, sets Host to upstream, appends
-// gatewayVia, and sets Connection: close for the new connection. An
-// absolute-form target becomes origin-form. The body becomes content, declared
-// with its length unless the client sent no body. It removes hop-by-hop
-// trailers before request.Write frames the remaining fields.
+// gatewayVia, sets Connection: close for the new connection, and decrements a
+// parsed Max-Forwards (RFC 9110, Section 7.6.2). An absolute-form target
+// becomes origin-form. The body becomes content, declared with its length
+// unless the client sent no body. It removes hop-by-hop trailers before
+// request.Write frames the remaining fields.
 func prepareRequest(message *request.Message, content []byte, upstream string) {
 	headers := withoutHopByHop(message.Headers, message.Fields.ConnectionOptions)
 
@@ -49,6 +51,9 @@ func prepareRequest(message *request.Message, content []byte, upstream string) {
 	headers["host"] = []string{upstream}
 	headers["via"] = append(slices.Clone(headers["via"]), gatewayVia)
 	headers["connection"] = []string{"close"}
+	if message.Fields.MaxForwardsPresent && message.Fields.MaxForwards > 0 {
+		headers["max-forwards"] = []string{strconv.FormatInt(message.Fields.MaxForwards-1, 10)}
+	}
 	message.Headers = headers
 	if len(message.Trailers) > 0 {
 		message.Trailers = withoutHopByHop(message.Trailers, message.Fields.ConnectionOptions)
