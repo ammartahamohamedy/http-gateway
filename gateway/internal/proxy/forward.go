@@ -3,7 +3,6 @@ package proxy
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"time"
@@ -30,24 +29,18 @@ var (
 )
 
 // forward runs one exchange with the backend at config.Upstream for message,
-// whose body was buffered as content. It owns the upstream connection from
-// dial to close: prepareRequest, request.Write, response.Read, prepareResponse,
-// then response.Write to client, copying the body as it arrives.
-//
-// Interim responses are relayed to client as they arrive, except 100
-// (Continue): the gateway answered the client's expectation itself and dropped
-// Expect upstream. An interim response prepareResponse refuses is dropped. A
-// final response whose transfer codings the gateway cannot decode is refused
-// before anything of it is sent.
+// whose body was buffered as content, and owns the upstream connection from
+// dial to close. Its stages are dialUpstream, sendRequest, receiveResponse, and
+// relayResponse.
 //
 // committed reports whether the final response has started reaching client.
 // Only before that can the caller answer an error with its own response;
 // afterwards it can only close the connection. Relayed interim responses do not
 // commit the exchange.
 func forward(client net.Conn, message *request.Message, content []byte, config Config) (committed bool, err error) {
-	upstream, err := net.DialTimeout("tcp", config.Upstream, upstreamDialTimeout)
+	upstream, err := dialUpstream(config.Upstream)
 	if err != nil {
-		return false, fmt.Errorf("dialing upstream: %w", err)
+		return false, err
 	}
 
 	defer func() {
@@ -56,18 +49,91 @@ func forward(client net.Conn, message *request.Message, content []byte, config C
 		}
 	}()
 
-	if err := upstream.SetDeadline(time.Now().Add(upstreamHeadTimeout)); err != nil {
-		return false, fmt.Errorf("setting upstream deadline: %w", err)
+	requestMethod := message.Line.Method
+
+	if err := sendRequest(upstream, message, content, config.Upstream); err != nil {
+		return false, err
 	}
 
-	requestMethod := message.Line.Method
-	prepareRequest(message, content, config.Upstream)
+	final, err := receiveResponse(upstream, client, requestMethod)
+	if err != nil {
+		return false, err
+	}
+
+	defer func() {
+		if err := final.Body.Close(); err != nil {
+			log.Printf("closing response body: %v", err)
+		}
+	}()
+
+	return relayResponse(client, upstream, final, requestMethod)
+}
+
+// dialUpstream connects to the backend at address within upstreamDialTimeout
+// and starts the upstreamHeadTimeout deadline, which covers sending the request
+// and reading every response head.
+func dialUpstream(address string) (net.Conn, error) {
+	upstream, err := net.DialTimeout("tcp", address, upstreamDialTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("dialing upstream: %w", err)
+	}
+
+	if err := upstream.SetDeadline(time.Now().Add(upstreamHeadTimeout)); err != nil {
+		if closeErr := upstream.Close(); closeErr != nil {
+			log.Printf("closing upstream connection: %v", closeErr)
+		}
+		return nil, fmt.Errorf("setting upstream deadline: %w", err)
+	}
+
+	return upstream, nil
+}
+
+// sendRequest prepares message for the backend at address (prepareRequest),
+// with content as its body, and writes it to upstream.
+func sendRequest(upstream net.Conn, message *request.Message, content []byte, address string) error {
+	prepareRequest(message, content, address)
 
 	if err := request.Write(upstream, message); err != nil {
-		return false, fmt.Errorf("writing request upstream: %w", err)
+		return fmt.Errorf("writing request upstream: %w", err)
 	}
 
-	final, err := response.Read(bufio.NewReader(upstream), requestMethod, func(interim *response.Message) error {
+	return nil
+}
+
+// receiveResponse reads the final response to a requestMethod request from
+// upstream, relaying interim responses to client as they arrive (relayInterim),
+// and prepares it for client (prepareResponse). A final response whose transfer
+// codings the gateway cannot decode, or that prepareResponse refuses, is
+// closed and returned as an error before anything of it is sent, so the caller
+// still owns the answer.
+func receiveResponse(upstream, client net.Conn, requestMethod string) (*response.Message, error) {
+	final, err := response.Read(bufio.NewReader(upstream), requestMethod, relayInterim(client, requestMethod))
+	if err != nil {
+		return nil, fmt.Errorf("reading response upstream: %w", err)
+	}
+
+	err = fields.CheckTransferCodingSupport(final.Fields.TransferCodings)
+	if err == nil {
+		err = prepareResponse(final)
+	}
+
+	if err != nil {
+		if closeErr := final.Body.Close(); closeErr != nil {
+			log.Printf("closing response body: %v", closeErr)
+		}
+		return nil, err
+	}
+
+	return final, nil
+}
+
+// relayInterim returns the response.Read callback that relays interim
+// responses to a requestMethod request to client, each within
+// upstreamHeadTimeout. It drops 100 (Continue), since the gateway answered the
+// client's expectation itself and dropped Expect upstream, and drops an interim
+// response prepareResponse refuses rather than failing the exchange.
+func relayInterim(client net.Conn, requestMethod string) func(*response.Message) error {
+	return func(interim *response.Message) error {
 		if interim.Line.StatusCode == 100 || prepareResponse(interim) != nil {
 			return nil
 		}
@@ -77,30 +143,17 @@ func forward(client net.Conn, message *request.Message, content []byte, config C
 		}
 
 		return response.Write(client, interim, requestMethod)
-	})
-	if err != nil {
-		return false, fmt.Errorf("reading response upstream: %w", err)
 	}
+}
 
-	defer func() {
-		if err := final.Body.Close(); err != nil {
-			log.Printf("closing response body: %v", err)
-		}
-	}()
-
-	if err := fields.CheckTransferCodingSupport(final.Fields.TransferCodings); err != nil {
-		return false, err
-	}
-
-	if err := prepareResponse(final); err != nil {
-		return false, err
-	}
-
+// relayResponse writes final, the response to a requestMethod request, to
+// client, copying its body from upstream as it arrives. Each body read may
+// wait responseBodyIdleTimeout, and the copy and its writes end within
+// responseBodyTimeout. It reports committed as forward does: a failure before
+// response.Write starts leaves the exchange uncommitted.
+func relayResponse(client, upstream net.Conn, final *response.Message, requestMethod string) (committed bool, err error) {
 	cutoff := time.Now().Add(responseBodyTimeout)
-	final.Body = struct {
-		io.Reader
-		io.Closer
-	}{newIdleDeadlineReader(upstream, final.Body, responseBodyIdleTimeout, cutoff), final.Body}
+	final.Body = newIdleDeadlineReader(upstream, final.Body, responseBodyIdleTimeout, cutoff)
 
 	if err := client.SetWriteDeadline(cutoff); err != nil {
 		return false, fmt.Errorf("setting client write deadline: %w", err)

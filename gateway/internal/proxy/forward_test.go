@@ -267,3 +267,21 @@ func TestForwardTruncatedBodyAfterCommit(t *testing.T) {
 	require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 	require.True(t, committed, "the final response has started, so no gateway error may follow")
 }
+
+func TestRelayResponseIsUncommittedWhenTheClientDeadlineFails(t *testing.T) {
+	client, peer := net.Pipe()
+	require.NoError(t, client.Close())
+	require.NoError(t, peer.Close())
+	upstream, upstreamPeer := net.Pipe()
+	t.Cleanup(func() { _ = upstream.Close(); _ = upstreamPeer.Close() })
+
+	final := &response.Message{
+		Line: response.Line{Version: "1.1", StatusCode: 200},
+		Body: io.NopCloser(strings.NewReader("")),
+	}
+
+	committed, err := relayResponse(client, upstream, final, "GET")
+	require.Error(t, err)
+	require.False(t, committed, "nothing reached the client, so the caller can still answer 502")
+	require.Equal(t, 502, upstreamErrorStatus(err))
+}

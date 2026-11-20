@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/request"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/response"
 	"github.com/stretchr/testify/require"
 )
@@ -175,4 +177,33 @@ func TestHandleConnectionClosesSilentlyWithoutARequest(t *testing.T) {
 	client, done := serve(t, Config{Upstream: unusedAddress(t)})
 	require.NoError(t, client.Close())
 	waitForHandler(t, done)
+}
+
+func TestAdmitRequest(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want error
+	}{
+		{"admitted", "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", nil},
+		{"undecodable transfer coding", "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: compress, chunked\r\n\r\n0\r\n\r\n", fields.ErrUnsupportedTransferCoding},
+		{"CONNECT tunnel", "CONNECT example.com:443 HTTP/1.1\r\nHost: example.com:443\r\n\r\n", ErrUnsupportedTargetForm},
+		{"ambiguous path", "GET /a/../b HTTP/1.1\r\nHost: example.com\r\n\r\n", ErrAmbiguousPath},
+		{"unsupported expectation", "GET / HTTP/1.1\r\nHost: example.com\r\nExpect: something\r\n\r\n", fields.ErrUnsupportedExpectation},
+		{"first refusal wins", "POST /a/../b HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: compress, chunked\r\nExpect: something\r\n\r\n0\r\n\r\n", fields.ErrUnsupportedTransferCoding},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			message, err := request.Read(bufio.NewReader(strings.NewReader(test.raw)))
+			require.NoError(t, err)
+
+			err = admitRequest(message)
+			if test.want == nil {
+				require.NoError(t, err)
+				return
+			}
+			require.ErrorIs(t, err, test.want)
+		})
+	}
 }

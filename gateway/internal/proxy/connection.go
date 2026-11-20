@@ -22,9 +22,9 @@ type Config struct {
 }
 
 // HandleConnection runs one exchange on connection, the client socket it owns.
-// It reads the request head within requestHeadTimeout, applies transfer
-// coding, target, and expectation policy, buffers the body (readRequestBody),
-// and forwards the request to config.Upstream (forward).
+// It reads the request head within requestHeadTimeout, applies the gateway's
+// request policy (admitRequest), buffers the body (readRequestBody), and
+// forwards the request to config.Upstream (forward).
 //
 // A request that fails to read or is refused gets the status
 // requestErrorStatus chooses, and an upstream failure before the final
@@ -58,17 +58,7 @@ func HandleConnection(connection net.Conn, config Config) {
 
 	requestMethod := message.Line.Method
 
-	if err := fields.CheckTransferCodingSupport(message.Fields.TransferCodings); err != nil {
-		reject(err, requestMethod)
-		return
-	}
-
-	if err := checkRequestTarget(message); err != nil {
-		reject(err, requestMethod)
-		return
-	}
-
-	if err := fields.CheckExpectationSupport(message.Fields.Expectations); err != nil {
+	if err := admitRequest(message); err != nil {
 		reject(err, requestMethod)
 		return
 	}
@@ -86,4 +76,20 @@ func HandleConnection(connection net.Conn, config Config) {
 			writeErrorResponse(connection, upstreamErrorStatus(err), requestMethod)
 		}
 	}
+}
+
+// admitRequest applies the gateway's request policy before the body is read:
+// transfer codings it can decode, a request-target it serves
+// (checkRequestTarget), and expectations it supports. The first refusal is
+// returned for requestErrorStatus to answer.
+func admitRequest(message *request.Message) error {
+	if err := fields.CheckTransferCodingSupport(message.Fields.TransferCodings); err != nil {
+		return err
+	}
+
+	if err := checkRequestTarget(message); err != nil {
+		return err
+	}
+
+	return fields.CheckExpectationSupport(message.Fields.Expectations)
 }
