@@ -68,23 +68,30 @@ func TestCheckRequestTarget(t *testing.T) {
 	}
 }
 
-func TestOriginForm(t *testing.T) {
+func TestOriginTarget(t *testing.T) {
 	tests := []struct {
+		method string
 		target string
 		want   string
 	}{
-		{"http://example.com/a/b?q=1", "/a/b?q=1"},
-		{"http://example.com", "/"},
-		{"http://example.com:8080", "/"},
-		{"HTTPS://example.com/", "/"},
-		{"http://example.com?q", "/?q"},
-		{"http://[::1]:8080/a", "/a"},
-		{"http://example.com/a%2Fb?x=%20", "/a%2Fb?x=%20"},
+		{"GET", "http://example.com/a/b?q=1", "/a/b?q=1"},
+		{"GET", "http://example.com", "/"},
+		{"GET", "http://example.com:8080", "/"},
+		{"GET", "HTTPS://example.com/", "/"},
+		{"GET", "http://example.com?q", "/?q"},
+		{"GET", "http://[::1]:8080/a", "/a"},
+		{"GET", "http://example.com/a%2Fb?x=%20", "/a%2Fb?x=%20"},
+		{"OPTIONS", "http://example.com", "*"},
+		{"OPTIONS", "http://example.com:8080", "*"},
+		{"OPTIONS", "http://example.com/", "/"},
+		{"OPTIONS", "http://example.com?q", "/?q"},
+		{"OPTIONS", "http://example.com?", "/?"},
+		{"OPTIONS", "http://example.com/a", "/a"},
 	}
 
 	for test := range slices.Values(tests) {
-		t.Run(test.target, func(t *testing.T) {
-			require.Equal(t, test.want, originForm(test.target))
+		t.Run(test.method+" "+test.target, func(t *testing.T) {
+			require.Equal(t, test.want, originTarget(test.method, test.target))
 		})
 	}
 }

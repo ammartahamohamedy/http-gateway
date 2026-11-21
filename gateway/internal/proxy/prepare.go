@@ -37,7 +37,7 @@ var (
 // Expect after handling the expectation, sets Host to upstream, appends
 // gatewayVia, sets Connection: close for the new connection, and decrements a
 // parsed Max-Forwards (RFC 9110, Section 7.6.2). An absolute-form target
-// becomes origin-form. The body becomes content, declared with its length
+// becomes the one originTarget chooses. The body becomes content, declared with its length
 // unless the client sent no body. request.Write frames the remaining trailers.
 func prepareRequest(message *request.Message, content []byte, upstream string) {
 	dropped := slices.Concat(hopByHopFields, message.Fields.ConnectionOptions, forwardingFields)
@@ -57,7 +57,7 @@ func prepareRequest(message *request.Message, content []byte, upstream string) {
 	}
 
 	if message.Line.TargetForm() == request.AbsoluteForm {
-		message.Line.RequestTarget = originForm(message.Line.RequestTarget)
+		message.Line.RequestTarget = originTarget(message.Line.Method, message.Line.RequestTarget)
 	}
 
 	hadBody := message.Fields.ContentLengthPresent || len(message.Fields.TransferCodings) > 0

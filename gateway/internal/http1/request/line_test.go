@@ -81,6 +81,7 @@ func TestParseLineRejectsMalformedInput(t *testing.T) {
 		{"invalid opaque URI escape", "GET urn:example:%ZZ HTTP/1.1"},
 		{"relative target", "GET relative/path HTTP/1.1"},
 		{"absolute HTTP URI without host", "GET http:///path HTTP/1.1"},
+		{"absolute HTTP URI with only a port", "GET http://:80/path HTTP/1.1"},
 		{"HTTP URI userinfo", "GET http://user@example.com/ HTTP/1.1"},
 		{"asterisk requires OPTIONS", "GET * HTTP/1.1"},
 		{"CONNECT origin target", "CONNECT /path HTTP/1.1"},

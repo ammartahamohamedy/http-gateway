@@ -65,7 +65,7 @@ func checkRequestTarget(message *request.Message) error {
 		if !strings.EqualFold(scheme, "http") && !strings.EqualFold(scheme, "https") {
 			return errUnsupportedScheme
 		}
-		path = originForm(target)
+		path = originTarget(message.Line.Method, target)
 	}
 
 	if err := checkPort(message.Fields.Authority); err != nil {
@@ -75,19 +75,22 @@ func checkRequestTarget(message *request.Message) error {
 	return checkPath(path)
 }
 
-// originForm returns the origin-form of an http(s) absolute-form target: its
-// path and query, with "/" for an empty path (RFC 9112, Section 3.2.1). A
-// request forwarded to an origin server uses origin-form (Section 3.2.2).
-// request.Read guarantees "//" and a nonempty authority for such targets.
-func originForm(target string) string {
+// originTarget returns the request-target sent to the origin server for an
+// http(s) absolute-form target (RFC 9112, Section 3.2.2): its origin-form, the
+// path and query with "/" for an empty path (Section 3.2.1), except that an
+// OPTIONS request with an empty path and no query becomes "*", since it asks
+// about the server as a whole (Section 3.2.4). request.Read guarantees "//" and
+// a nonempty host for such targets.
+func originTarget(method, target string) string {
 	rest := strings.TrimPrefix(target[strings.IndexByte(target, ':')+1:], "//")
 
 	start := strings.IndexAny(rest, "/?")
-	if start < 0 {
+	switch {
+	case start < 0 && method == "OPTIONS":
+		return "*"
+	case start < 0:
 		return "/"
-	}
-
-	if rest[start] == '?' {
+	case rest[start] == '?':
 		return "/" + rest[start:]
 	}
 

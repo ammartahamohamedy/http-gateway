@@ -139,6 +139,7 @@ func TestHandleConnectionAnswersRefusedRequests(t *testing.T) {
 		{"TRACE", "TRACE / HTTP/1.1\r\nHost: example.com\r\n\r\n", 501},
 		{"unserved Host", "GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n", 421},
 		{"unserved absolute-form authority", "GET http://evil.example/ HTTP/1.1\r\nHost: example.com\r\n\r\n", 421},
+		{"absolute-form without a host", "GET http://:80/ HTTP/1.1\r\nHost: example.com\r\n\r\n", 400},
 		{"TRACE with Max-Forwards 0", "TRACE / HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: 0\r\n\r\n", 501},
 		{"invalid Max-Forwards on OPTIONS", "OPTIONS / HTTP/1.1\r\nHost: example.com\r\nMax-Forwards: x\r\n\r\n", 400},
 	}

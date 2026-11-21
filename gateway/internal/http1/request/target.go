@@ -47,7 +47,8 @@ func (line Line) TargetForm() TargetForm {
 // a nonempty host and decimal port; asterisk-form is permitted only for OPTIONS.
 // Absolute-form accepts any absolute-URI, including opaque ones such as URNs,
 // so "host:port" parses as a URI whose scheme is "host". Absolute HTTP(S) URIs
-// must include a host and exclude userinfo. The original target is preserved,
+// must include a nonempty host, not just a port (RFC 9110, Section 4.2.1), and
+// exclude userinfo. The original target is preserved,
 // including percent-escape encoding. This function does not resolve hosts,
 // check port ranges, or restrict schemes; gateway policy decides which forms
 // and schemes are forwarded.
@@ -84,7 +85,7 @@ func validateTarget(method, requestTarget string) error {
 	}
 
 	if strings.EqualFold(target.Scheme, "http") || strings.EqualFold(target.Scheme, "https") {
-		if target.Host == "" || target.User != nil {
+		if target.Hostname() == "" || target.User != nil {
 			return errors.New("http1: HTTP URI requires a host and must not include userinfo")
 		}
 	}

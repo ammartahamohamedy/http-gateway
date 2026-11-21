@@ -331,3 +331,13 @@ func TestForwardFiltersResponseTrailers(t *testing.T) {
 	require.Equal(t, "hi", string(content))
 	require.Equal(t, header.Section{"server-timing": {"db;dur=5"}}, relayed.Trailers, "the nominated trailer never follows the body")
 }
+
+func TestForwardSendsAsteriskForServerWideOptions(t *testing.T) {
+	upstream, requests := fakeUpstream(t, replyWith("HTTP/1.1 204 No Content\r\n\r\n"))
+
+	_, _, err := runForward(t, "OPTIONS http://example.com:8080 HTTP/1.1\r\nHost: example.com:8080\r\n\r\n", upstream)
+	require.NoError(t, err)
+
+	sent := <-requests
+	require.Equal(t, "*", sent.message.Line.RequestTarget)
+}
