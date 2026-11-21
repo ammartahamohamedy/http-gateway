@@ -175,3 +175,21 @@ func TestPrepareRequestMaxForwards(t *testing.T) {
 		})
 	}
 }
+
+func TestPrepareRequestFiltersTrailers(t *testing.T) {
+	message, content := readRequest(t, "POST / HTTP/1.1\r\nHost: a\r\nTransfer-Encoding: chunked\r\nConnection: X-Debug\r\n\r\n"+
+		"2\r\nhi\r\n0\r\nX-Debug: local\r\nForwarded: for=203.0.113.9\r\nX-Forwarded-Proto: https\r\nX-Checksum: abc\r\n\r\n")
+	prepareRequest(message, content, "backend:8081")
+	require.Equal(t, header.Section{"x-checksum": {"abc"}}, message.Trailers)
+}
+
+func TestPrepareResponseFiltersAnnouncedTrailers(t *testing.T) {
+	message := &response.Message{
+		Line:    response.Line{Version: "1.1", StatusCode: 200},
+		Headers: header.Section{"connection": {"X-Debug"}},
+		Fields:  response.Fields{TrailerNames: []string{"x-debug", "server-timing", "keep-alive"}},
+	}
+
+	require.NoError(t, prepareResponse(message))
+	require.Equal(t, []string{"server-timing"}, message.Fields.TrailerNames)
+}

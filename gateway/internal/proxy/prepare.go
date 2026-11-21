@@ -31,20 +31,17 @@ var (
 )
 
 // prepareRequest turns message, whose body was buffered as content, into the
-// request sent to upstream, in place. It drops the hop-by-hop fields,
-// client-supplied forwarding metadata, and Proxy-Authorization. It removes
+// request sent to upstream, in place. It drops the hop-by-hop fields and
+// client-supplied forwarding metadata, from the header section and the
+// trailers alike, and Proxy-Authorization. It removes
 // Expect after handling the expectation, sets Host to upstream, appends
 // gatewayVia, sets Connection: close for the new connection, and decrements a
 // parsed Max-Forwards (RFC 9110, Section 7.6.2). An absolute-form target
 // becomes origin-form. The body becomes content, declared with its length
-// unless the client sent no body. It removes hop-by-hop trailers before
-// request.Write frames the remaining fields.
+// unless the client sent no body. request.Write frames the remaining trailers.
 func prepareRequest(message *request.Message, content []byte, upstream string) {
-	headers := withoutHopByHop(message.Headers, message.Fields.ConnectionOptions)
-
-	for name := range slices.Values(forwardingFields) {
-		delete(headers, name)
-	}
+	dropped := slices.Concat(hopByHopFields, message.Fields.ConnectionOptions, forwardingFields)
+	headers := withoutFields(message.Headers, dropped)
 
 	delete(headers, "expect")
 	delete(headers, "proxy-authorization")
@@ -56,7 +53,7 @@ func prepareRequest(message *request.Message, content []byte, upstream string) {
 	}
 	message.Headers = headers
 	if len(message.Trailers) > 0 {
-		message.Trailers = withoutHopByHop(message.Trailers, message.Fields.ConnectionOptions)
+		message.Trailers = withoutFields(message.Trailers, dropped)
 	}
 
 	if message.Line.TargetForm() == request.AbsoluteForm {
@@ -72,7 +69,8 @@ func prepareRequest(message *request.Message, content []byte, upstream string) {
 
 // prepareResponse turns message, an interim or final response read from
 // upstream, into the one sent to the client, in place. It drops the hop-by-hop
-// fields and appends gatewayVia; a final response also gets a Date when it has
+// fields, from the header section and from the trailers response.Write
+// announces (Fields.TrailerNames), and appends gatewayVia; a final response also gets a Date when it has
 // none (RFC 9110, Section 6.6.1) and Connection: close. Interim responses skip
 // response.Read's field stage, so Connection is parsed here; an invalid list
 // returns the fields.ParseConnection error and leaves message unchanged, and
@@ -83,7 +81,11 @@ func prepareResponse(message *response.Message) error {
 		return err
 	}
 
-	headers := withoutHopByHop(message.Headers, options)
+	dropped := slices.Concat(hopByHopFields, options)
+	headers := withoutFields(message.Headers, dropped)
+	message.Fields.TrailerNames = slices.DeleteFunc(slices.Clone(message.Fields.TrailerNames), func(name string) bool {
+		return slices.Contains(dropped, name)
+	})
 	headers["via"] = append(slices.Clone(headers["via"]), gatewayVia)
 
 	if message.Line.StatusCode >= 200 {
@@ -97,15 +99,15 @@ func prepareResponse(message *response.Message) error {
 	return nil
 }
 
-// withoutHopByHop returns a copy of a field section without hopByHopFields and the
-// fields that options, lowercase Connection options, nominate.
-func withoutHopByHop(received header.Section, options []string) header.Section {
+// withoutFields returns a copy of a field section without the lowercase field
+// names in names.
+func withoutFields(received header.Section, names []string) header.Section {
 	section := maps.Clone(received)
 	if section == nil {
 		section = make(header.Section)
 	}
 
-	for name := range slices.Values(slices.Concat(hopByHopFields, options)) {
+	for name := range slices.Values(names) {
 		delete(section, name)
 	}
 

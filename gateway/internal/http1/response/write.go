@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -27,9 +28,9 @@ import (
 // received framing fields. A 1xx or 204 response carries no framing fields. A
 // 304 response, and any response to HEAD, declares the Content-Length in Fields
 // when present but has no body. Otherwise a declared Content-Length is written
-// with exactly that many bytes, and a response without one is written chunked,
-// with Trailers after the body, announced by a Trailer field naming the allowed
-// fields from Fields.TrailerNames. A nil Body reads as empty. body.Write
+// with exactly that many bytes, and a response without one is written chunked.
+// Its Trailer field names the allowed fields from Fields.TrailerNames, and only
+// those Trailers follow the body. A nil Body reads as empty. body.Write
 // enforces the framing.
 //
 // Interim responses that Read passes to onInterim are written the same way.
@@ -91,7 +92,15 @@ func Write(writer io.Writer, message *Message, requestMethod string) error {
 		return err
 	}
 
-	if err := body.Write(buffered, source, sent, length, func() header.Section { return message.Trailers }); err != nil {
+	announcedTrailers := func() header.Section {
+		trailers := maps.Clone(message.Trailers)
+		maps.DeleteFunc(trailers, func(name string, _ []string) bool {
+			return !slices.Contains(trailerNames, name)
+		})
+		return trailers
+	}
+
+	if err := body.Write(buffered, source, sent, length, announcedTrailers); err != nil {
 		return err
 	}
 

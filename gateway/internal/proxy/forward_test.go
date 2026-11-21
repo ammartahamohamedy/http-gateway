@@ -205,8 +205,8 @@ func TestForwardFiltersRequestTrailers(t *testing.T) {
 	upstream, requests := fakeUpstream(t, replyWith("HTTP/1.1 204 No Content\r\n\r\n"))
 
 	raw := "POST /documents HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n" +
-		"Connection: X-Debug\r\nTrailer: X-Debug, X-Checksum\r\n\r\n" +
-		"5\r\nhello\r\n0\r\nX-Debug: local\r\nX-Checksum: abc\r\n\r\n"
+		"Connection: X-Debug\r\nTrailer: X-Debug, X-Checksum, X-Forwarded-For\r\n\r\n" +
+		"5\r\nhello\r\n0\r\nX-Debug: local\r\nX-Checksum: abc\r\nX-Forwarded-For: 203.0.113.9\r\n\r\n"
 
 	_, _, err := runForward(t, raw, upstream)
 	require.NoError(t, err)
@@ -310,4 +310,24 @@ func TestRelayResponseIsUncommittedWhenTheClientDeadlineFails(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, committed, "nothing reached the client, so the caller can still answer 502")
 	require.Equal(t, 502, upstreamErrorStatus(err))
+}
+
+func TestForwardFiltersResponseTrailers(t *testing.T) {
+	upstream, _ := fakeUpstream(t, replyWith("HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n"+
+		"Connection: X-Debug\r\nTrailer: X-Debug, Server-Timing\r\n\r\n"+
+		"2\r\nhi\r\n0\r\nX-Debug: local\r\nServer-Timing: db;dur=5\r\n\r\n"))
+
+	output, committed, err := runForward(t, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", upstream)
+	require.NoError(t, err)
+	require.True(t, committed)
+	require.NotContains(t, strings.ToLower(output), "x-debug")
+
+	relayed, err := response.Read(bufio.NewReader(strings.NewReader(output)), "GET", nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"server-timing"}, relayed.Headers.Values("Trailer"), "the head announces only what is forwarded")
+
+	content, err := io.ReadAll(relayed.Body)
+	require.NoError(t, err)
+	require.Equal(t, "hi", string(content))
+	require.Equal(t, header.Section{"server-timing": {"db;dur=5"}}, relayed.Trailers, "the nominated trailer never follows the body")
 }

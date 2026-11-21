@@ -147,6 +147,7 @@ func TestWriteEnforcesDeclaredLength(t *testing.T) {
 func TestWriteNeverCompletesABodyWithInvalidTrailers(t *testing.T) {
 	message := &Message{
 		Line:     Line{StatusCode: 200},
+		Fields:   Fields{TrailerNames: []string{"x-bad"}},
 		Body:     io.NopCloser(strings.NewReader("hi")),
 		Trailers: header.Section{"x-bad": {"a\nb"}},
 	}
@@ -246,4 +247,18 @@ func TestWriteForwardsInterimResponses(t *testing.T) {
 
 	require.Equal(t, "HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 103 Early Hints\r\nlink: </a.css>\r\n\r\n"+
 		"HTTP/1.1 201 Created\r\ncontent-length: 0\r\nlocation: /documents/1\r\n\r\n", output.String())
+}
+
+func TestWriteSendsOnlyAnnouncedTrailers(t *testing.T) {
+	message := &Message{
+		Line:     Line{StatusCode: 200},
+		Fields:   Fields{TrailerNames: []string{"server-timing"}},
+		Body:     io.NopCloser(strings.NewReader("hi")),
+		Trailers: header.Section{"server-timing": {"db;dur=5"}, "x-unannounced": {"1"}},
+	}
+
+	var output bytes.Buffer
+	require.NoError(t, Write(&output, message, "GET"))
+	require.Equal(t, "HTTP/1.1 200 OK\r\ntrailer: server-timing\r\ntransfer-encoding: chunked\r\n\r\n"+
+		"2\r\nhi\r\n0\r\nserver-timing: db;dur=5\r\n\r\n", output.String())
 }
