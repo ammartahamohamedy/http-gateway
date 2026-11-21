@@ -72,8 +72,9 @@ func ValidateAccept(values []string) error {
 }
 
 // isAcceptMember reports whether member is a media range with optional
-// parameters. A parameter named "q", in either case, is the weight: it must be a
-// valid qvalue and come last, ignoring empty parameters.
+// parameters. A parameter named "q", in either case, is the weight wherever it
+// appears, since recipients do not rely on senders putting it last (RFC 9110,
+// Section 12.5.1); it must be a valid qvalue and appear at most once.
 func isAcceptMember(member string) bool {
 	parts, ok := grammar.SplitUnquoted(member, ';')
 	if !ok || !isMediaRange(grammar.TrimOWS(parts[0])) {
@@ -86,17 +87,16 @@ func isAcceptMember(member string) bool {
 		if parameter == "" {
 			continue
 		}
-		if weighted {
-			return false
-		}
 		name, value, _ := strings.Cut(parameter, "=")
-		if name == "q" || name == "Q" {
-			if !grammar.IsQValue(value) {
+		switch {
+		case name != "q" && name != "Q":
+			if !grammar.IsParameter(parameter) {
 				return false
 			}
-			weighted = true
-		} else if !grammar.IsParameter(parameter) {
+		case weighted || !grammar.IsQValue(value):
 			return false
+		default:
+			weighted = true
 		}
 	}
 
