@@ -231,3 +231,52 @@ type failingWriter struct {
 }
 
 func (failing failingWriter) Write([]byte) (int, error) { return 0, failing.err }
+
+// recordingWriter keeps every Write call it receives.
+type recordingWriter struct {
+	calls []string
+	err   error
+}
+
+func (recorder *recordingWriter) Write(data []byte) (int, error) {
+	recorder.calls = append(recorder.calls, string(data))
+	return len(data), recorder.err
+}
+
+func TestWriteMessage(t *testing.T) {
+	tests := []struct {
+		name   string
+		source io.Reader
+		mode   Mode
+		length int64
+		want   string
+	}{
+		{"nil source", nil, None, 0, "HEAD\r\n\r\n"},
+		{"nil source with a declared zero length", nil, ContentLength, 0, "HEAD\r\n\r\n"},
+		{"content length", strings.NewReader("hello"), ContentLength, 5, "HEAD\r\n\r\nhello"},
+		{"chunked", strings.NewReader("hi"), Chunked, 0, "HEAD\r\n\r\n2\r\nhi\r\n0\r\n\r\n"},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			recorder := &recordingWriter{}
+			require.NoError(t, WriteMessage(recorder, []byte("HEAD\r\n\r\n"), test.source, test.mode, test.length, nil))
+			require.Equal(t, []string{test.want}, recorder.calls, "the whole message arrives in one flush")
+		})
+	}
+}
+
+func TestWriteMessagePassesErrors(t *testing.T) {
+	writeErr := errors.New("connection reset")
+	require.ErrorIs(t, WriteMessage(&recordingWriter{err: writeErr}, []byte("HEAD\r\n\r\n"), nil, None, 0, nil), writeErr)
+
+	largeHead := []byte(strings.Repeat("h", 8192))
+	require.ErrorIs(t, WriteMessage(&recordingWriter{err: writeErr}, largeHead, nil, None, 0, nil), writeErr,
+		"a head larger than the buffer is written at once, and its error returned")
+
+	sourceErr := errors.New("upstream reset")
+	recorder := &recordingWriter{}
+	err := WriteMessage(recorder, []byte("HEAD\r\n\r\n"), iotest.ErrReader(sourceErr), Chunked, 0, nil)
+	require.ErrorIs(t, err, sourceErr)
+	require.Empty(t, recorder.calls, "a body failing before the first flush leaves writer untouched")
+}

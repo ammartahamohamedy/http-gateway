@@ -1,12 +1,14 @@
 package body
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"fmt"
 	"io"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 )
@@ -17,6 +19,28 @@ var ErrBodyLength = errors.New("http1: body length does not match its Content-Le
 
 // chunkBufferBytes caps the data in one written chunk.
 const chunkBufferBytes = 32 * 1024
+
+// WriteMessage writes a whole message to writer: head, the start-line and
+// header section exactly as given, then source as a body that Write frames by
+// mode, length, and trailers. A nil source reads as empty. Everything goes
+// through one buffered writer, flushed once the body ends. Errors from writer
+// and source are returned.
+func WriteMessage(writer io.Writer, head []byte, source io.Reader, mode Mode, length int64, trailers func() header.Section) error {
+	if source == nil {
+		source = strings.NewReader("")
+	}
+
+	buffered := bufio.NewWriter(writer)
+	if _, err := buffered.Write(head); err != nil {
+		return err
+	}
+
+	if err := Write(buffered, source, mode, length, trailers); err != nil {
+		return err
+	}
+
+	return buffered.Flush()
+}
 
 // Write writes source to writer as a body framed by mode. None writes nothing
 // and does not read source. ContentLength writes exactly length bytes; a source
