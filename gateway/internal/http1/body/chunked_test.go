@@ -255,3 +255,29 @@ func TestChunkedReaderSkipsCallbackOnError(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, called)
 }
+
+func TestChunkedReaderExtensionBudget(t *testing.T) {
+	extension := ";" + strings.Repeat("x", 4000-1) // 4000 extension bytes per line
+
+	within := strings.Repeat("1"+extension+"\r\na\r\n", 4) + "0\r\n\r\n"
+	content, _, err := decodeChunked(t, strings.NewReader(within), chunkedTestLimit)
+	require.NoError(t, err, "16000 extension bytes fit the budget")
+	require.Equal(t, "aaaa", content)
+
+	tests := []struct {
+		name string
+		wire string
+		want string
+	}{
+		{"spread over data chunks", strings.Repeat("1"+extension+"\r\na\r\n", 5) + "0\r\n\r\n", "aaaa"},
+		{"counted on the last chunk", strings.Repeat("1"+extension+"\r\na\r\n", 4) + "0" + extension + "\r\n\r\n", "aaaa"},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			content, _, err := decodeChunked(t, strings.NewReader(test.wire), chunkedTestLimit)
+			require.ErrorIs(t, err, ErrChunkExtensionsTooLarge)
+			require.Equal(t, test.want, content)
+		})
+	}
+}

@@ -17,6 +17,15 @@ import (
 // CRLF. It is a local limit.
 const maxChunkLineBytes = 4 * 1024
 
+// maxChunkExtensionBytes caps the chunk extension bytes across one body, since
+// the per-line cap alone leaves their total unbounded (RFC 9112, Section
+// 7.1.1). It is a local limit.
+const maxChunkExtensionBytes = 16 * 1024
+
+// ErrChunkExtensionsTooLarge reports chunk extensions over
+// maxChunkExtensionBytes in one body.
+var ErrChunkExtensionsTooLarge = errors.New("http1: chunk extensions exceed their byte limit")
+
 // trailerLimits are the local limits for a trailer section.
 var trailerLimits = header.Limits{
 	LineBytes:    8 * 1024,
@@ -26,7 +35,8 @@ var trailerLimits = header.Limits{
 
 // newChunkedReader returns the decoded data of a chunked body read from source
 // (RFC 9112, Section 7.1). It never reads past the body, so later bytes stay in
-// source. Chunk extensions are checked and ignored. The trailer section is read
+// source. Chunk extensions are checked and ignored, up to maxChunkExtensionBytes
+// across the body (ErrChunkExtensionsTooLarge). The trailer section is read
 // within trailerLimits and passed to onTrailers before io.EOF is returned, or
 // discarded when onTrailers is nil (RFC 9110, Section 6.5.1). Decoded data over
 // maxBytes returns ErrBodyTooLarge; a negative maxBytes is treated as zero.
@@ -34,7 +44,12 @@ var trailerLimits = header.Limits{
 // returns io.ErrUnexpectedEOF. Errors are sticky. Close stops further reads
 // without closing or draining source.
 func newChunkedReader(source *bufio.Reader, maxBytes int64, onTrailers func(header.Section)) io.ReadCloser {
-	return &chunkedReader{source: source, allowance: max(maxBytes, 0), onTrailers: onTrailers}
+	return &chunkedReader{
+		source:             source,
+		allowance:          max(maxBytes, 0),
+		extensionAllowance: maxChunkExtensionBytes,
+		onTrailers:         onTrailers,
+	}
 }
 
 type chunkedReader struct {
@@ -44,6 +59,8 @@ type chunkedReader struct {
 	allowance  int64 // decoded bytes still permitted
 	remaining  int64 // data bytes left in the current chunk
 	err        error // sticky; io.EOF after the last chunk and trailers
+
+	extensionAllowance int64 // chunk extension bytes still permitted
 }
 
 func (chunked *chunkedReader) Read(buffer []byte) (int, error) {
@@ -90,6 +107,13 @@ func (chunked *chunkedReader) nextChunk() error {
 	size, ok := parseChunkLine(line)
 	if !ok {
 		return fmt.Errorf("%w: malformed chunk-size line", ErrInvalidFraming)
+	}
+
+	if semicolon := strings.IndexByte(line, ';'); semicolon >= 0 {
+		chunked.extensionAllowance -= int64(len(line) - semicolon)
+		if chunked.extensionAllowance < 0 {
+			return ErrChunkExtensionsTooLarge
+		}
 	}
 
 	if size == 0 {

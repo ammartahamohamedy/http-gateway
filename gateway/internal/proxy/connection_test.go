@@ -327,3 +327,12 @@ func TestHandleConnectionStopsLingeringAfterLingerTimeout(t *testing.T) {
 
 	waitForHandler(t, done)
 }
+
+func TestHandleConnectionRefusesExcessiveChunkExtensions(t *testing.T) {
+	chunk := "1;" + strings.Repeat("x", 3998) + "\r\na\r\n"
+	raw := "POST / HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n" +
+		strings.Repeat(chunk, 5) + "0\r\n\r\n"
+
+	message, _ := exchange(t, raw, testConfig(unusedAddress(t)))
+	require.Equal(t, 413, message.Line.StatusCode)
+}

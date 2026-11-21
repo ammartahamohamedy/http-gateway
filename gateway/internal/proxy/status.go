@@ -21,7 +21,8 @@ var errorResponseTimeout = 10 * time.Second
 // requestErrorStatus returns the status answering a request that failed to read
 // or that gateway policy refused, or 0 when no response can be sent: the client
 // ended the connection, or it failed for a reason other than a timeout.
-// Timeouts get 408, oversized bodies 413, an oversized request-line 414, an
+// Timeouts get 408, oversized bodies or chunk extensions 413, an oversized
+// request-line 414, an
 // oversized header section 431, a host the gateway does not serve 421, refused
 // expectations 417, unsupported transfer codings, CONNECT, and TRACE 501, and
 // an unsupported HTTP version 505 (RFC 9110, Sections 15.5 and 15.6); every
@@ -36,7 +37,7 @@ func requestErrorStatus(err error) int {
 		return 408
 	case isNetErr:
 		return 0
-	case errors.Is(err, body.ErrBodyTooLarge):
+	case errors.Is(err, body.ErrBodyTooLarge), errors.Is(err, body.ErrChunkExtensionsTooLarge):
 		return 413
 	case errors.Is(err, request.ErrLineTooLong):
 		return 414
