@@ -91,20 +91,20 @@ func checkFramingConflict(_ Line, _ header.Section, parsed Fields) error {
 	return nil
 }
 
-// checkBodilessContentLength rejects the Content-Length that
-// fields.ErrFramingOnBodilessStatus forbids.
+// checkBodilessContentLength rejects Content-Length on a 204 response, which
+// fields.ErrFramingOnBodilessStatus forbids; readFinalHead covers 1xx.
 func checkBodilessContentLength(line Line, _ header.Section, parsed Fields) error {
-	if (line.StatusCode < 200 || line.StatusCode == 204) && parsed.ContentLengthPresent {
+	if line.StatusCode == 204 && parsed.ContentLengthPresent {
 		return fields.ErrFramingOnBodilessStatus
 	}
 
 	return nil
 }
 
-// checkBodilessTransferEncoding rejects the Transfer-Encoding that
-// fields.ErrFramingOnBodilessStatus forbids.
+// checkBodilessTransferEncoding rejects Transfer-Encoding on a 204 response,
+// which fields.ErrFramingOnBodilessStatus forbids; readFinalHead covers 1xx.
 func checkBodilessTransferEncoding(line Line, _ header.Section, parsed Fields) error {
-	if (line.StatusCode < 200 || line.StatusCode == 204) && len(parsed.TransferCodings) > 0 {
+	if line.StatusCode == 204 && len(parsed.TransferCodings) > 0 {
 		return fields.ErrFramingOnBodilessStatus
 	}
 

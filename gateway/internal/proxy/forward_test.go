@@ -239,6 +239,10 @@ func TestForwardFailsBeforeCommit(t *testing.T) {
 			address, _ := fakeUpstream(t, replyWith("HTTP/1.0 200 OK\r\n\r\n"))
 			return address
 		}, 502},
+		{"interim response with framing fields", func(t *testing.T) string {
+			address, _ := fakeUpstream(t, replyWith("HTTP/1.1 103 Early Hints\r\nContent-Length: 0\r\n\r\nHTTP/1.1 204 No Content\r\n\r\n"))
+			return address
+		}, 502},
 		{"407 from the backend", func(t *testing.T) string {
 			address, _ := fakeUpstream(t, replyWith("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic\r\nContent-Length: 0\r\n\r\n"))
 			return address

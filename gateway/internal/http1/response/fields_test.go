@@ -120,7 +120,6 @@ func TestProcessFieldsRejectsInvalidFields(t *testing.T) {
 
 func TestProcessFieldsCrossChecks(t *testing.T) {
 	noContent := Line{Version: "1.1", StatusCode: 204}
-	interim := Line{Version: "1.1", StatusCode: 103}
 
 	tests := []struct {
 		name    string
@@ -139,12 +138,6 @@ func TestProcessFieldsCrossChecks(t *testing.T) {
 			header.Section{"content-length": {"0"}},
 			"Content-Length", fields.ErrFramingOnBodilessStatus},
 		{"Transfer-Encoding on 204", noContent,
-			header.Section{"transfer-encoding": {"chunked"}},
-			"Transfer-Encoding", fields.ErrFramingOnBodilessStatus},
-		{"Content-Length on 1xx", interim,
-			header.Section{"content-length": {"0"}},
-			"Content-Length", fields.ErrFramingOnBodilessStatus},
-		{"Transfer-Encoding on 1xx", interim,
 			header.Section{"transfer-encoding": {"chunked"}},
 			"Transfer-Encoding", fields.ErrFramingOnBodilessStatus},
 		{"framing conflict precedes bodiless check", noContent,

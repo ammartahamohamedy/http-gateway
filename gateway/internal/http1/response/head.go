@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 )
 
@@ -25,10 +27,13 @@ var (
 // 9110, Section 15.2), is passed to onInterim as its own Message, or discarded
 // when onInterim is nil. More than maxInterimResponses interim responses and a
 // 101 (Switching Protocols) response are rejected, and EOF where a final
-// status-line must follow interim responses becomes io.ErrUnexpectedEOF.
+// status-line must follow interim responses becomes io.ErrUnexpectedEOF. The
+// field stage skips interim responses, so an interim response carrying
+// Content-Length or Transfer-Encoding is rejected here, with
+// fields.ErrFramingOnBodilessStatus in an *http1.FieldError.
 //
-// The loop spans the status-line and header stages, so it tags its own errors
-// with http1.StageStatusLine or http1.StageHeaders.
+// The loop spans the status-line, header, and field stages, so it tags its own
+// errors with http1.StageStatusLine, http1.StageHeaders, or http1.StageFields.
 func readFinalHead(reader *bufio.Reader, onInterim func(*Message) error) (Line, header.Section, error) {
 	for interimCount := 0; ; interimCount++ {
 		line, err := readLine(reader)
@@ -54,6 +59,13 @@ func readFinalHead(reader *bufio.Reader, onInterim func(*Message) error) (Line, 
 
 		if line.StatusCode >= 200 {
 			return line, headers, nil
+		}
+
+		for name := range slices.Values([]string{"Content-Length", "Transfer-Encoding"}) {
+			if len(headers.Values(name)) > 0 {
+				err := &http1.FieldError{Name: name, Err: fields.ErrFramingOnBodilessStatus}
+				return Line{}, nil, &http1.StageError{Stage: http1.StageFields, Err: err}
+			}
 		}
 
 		if onInterim != nil {

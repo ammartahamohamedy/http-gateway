@@ -10,6 +10,7 @@ import (
 	"testing/iotest"
 
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1"
+	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/header"
 	"github.com/stretchr/testify/require"
 )
@@ -260,4 +261,32 @@ func requireStage(t *testing.T, err error, stage http1.Stage) {
 	var stageErr *http1.StageError
 	require.ErrorAs(t, err, &stageErr)
 	require.Equal(t, stage, stageErr.Stage)
+}
+
+func TestReadRejectsFramingFieldsOnInterimResponses(t *testing.T) {
+	tests := []struct {
+		name  string
+		raw   string
+		field string
+	}{
+		{"Content-Length", "HTTP/1.1 103 Early Hints\r\nContent-Length: 0\r\n\r\nHTTP/1.1 204 No Content\r\n\r\n", "Content-Length"},
+		{"Transfer-Encoding", "HTTP/1.1 100 Continue\r\nTransfer-Encoding: chunked\r\n\r\nHTTP/1.1 204 No Content\r\n\r\n", "Transfer-Encoding"},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			relayed := 0
+			message, err := Read(bufio.NewReader(strings.NewReader(test.raw)), "GET", func(*Message) error {
+				relayed++
+				return nil
+			})
+			require.ErrorIs(t, err, fields.ErrFramingOnBodilessStatus)
+			requireStage(t, err, http1.StageFields)
+			var fieldErr *http1.FieldError
+			require.ErrorAs(t, err, &fieldErr)
+			require.Equal(t, test.field, fieldErr.Name)
+			require.Nil(t, message)
+			require.Zero(t, relayed, "the invalid interim response is not passed on")
+		})
+	}
 }
