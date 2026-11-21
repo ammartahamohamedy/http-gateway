@@ -239,6 +239,14 @@ func TestForwardFailsBeforeCommit(t *testing.T) {
 			address, _ := fakeUpstream(t, replyWith("HTTP/1.0 200 OK\r\n\r\n"))
 			return address
 		}, 502},
+		{"407 from the backend", func(t *testing.T) string {
+			address, _ := fakeUpstream(t, replyWith("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic\r\nContent-Length: 0\r\n\r\n"))
+			return address
+		}, 502},
+		{"426 from the backend", func(t *testing.T) string {
+			address, _ := fakeUpstream(t, replyWith("HTTP/1.1 426 Upgrade Required\r\nUpgrade: h2c\r\nConnection: Upgrade\r\nContent-Length: 0\r\n\r\n"))
+			return address
+		}, 502},
 		{"undecodable transfer coding", func(t *testing.T) string {
 			address, _ := fakeUpstream(t, replyWith("HTTP/1.1 200 OK\r\nTransfer-Encoding: compress, chunked\r\n\r\n"))
 			return address
@@ -340,4 +348,28 @@ func TestForwardSendsAsteriskForServerWideOptions(t *testing.T) {
 
 	sent := <-requests
 	require.Equal(t, "*", sent.message.Line.RequestTarget)
+}
+
+func TestForwardRelaysBodilessResponsesWhateverTheirCodings(t *testing.T) {
+	tests := []struct {
+		name   string
+		method string
+		reply  string
+	}{
+		{"response to HEAD", "HEAD", "HTTP/1.1 200 OK\r\nTransfer-Encoding: compress, chunked\r\n\r\n"},
+		{"304", "GET", "HTTP/1.1 304 Not Modified\r\nTransfer-Encoding: compress, chunked\r\n\r\n"},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			upstream, _ := fakeUpstream(t, replyWith(test.reply))
+			output, committed, err := runForward(t, test.method+" / HTTP/1.1\r\nHost: example.com\r\n\r\n", upstream)
+			require.NoError(t, err, "no body is read, so no decoder is needed")
+			require.True(t, committed)
+
+			relayed, err := response.Read(bufio.NewReader(strings.NewReader(output)), test.method, nil)
+			require.NoError(t, err)
+			require.Empty(t, relayed.Headers.Values("Transfer-Encoding"))
+		})
+	}
 }

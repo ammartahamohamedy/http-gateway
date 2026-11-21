@@ -8,7 +8,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/fields"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/request"
 	"github.com/ammartahamohamedy/http-gateway/gateway/internal/http1/response"
 )
@@ -103,22 +102,18 @@ func sendRequest(upstream net.Conn, message *request.Message, content []byte, ad
 
 // receiveResponse reads the final response to a requestMethod request from
 // upstream, relaying interim responses to client as they arrive (relayInterim),
-// and prepares it for client (prepareResponse). A final response whose transfer
-// codings the gateway cannot decode, or that prepareResponse refuses, is
-// closed and returned as an error before anything of it is sent, so the caller
-// still owns the answer.
+// and prepares it for client (prepareResponse). A final response that
+// prepareResponse refuses is closed and returned as an error before anything
+// of it is sent, so the caller still owns the answer. Transfer codings are not
+// checked here: one the gateway cannot decode fails on the first body read,
+// before any byte reaches the client, and a bodiless response is never read.
 func receiveResponse(upstream, client net.Conn, requestMethod string) (*response.Message, error) {
 	final, err := response.Read(bufio.NewReader(upstream), requestMethod, relayInterim(client, requestMethod))
 	if err != nil {
 		return nil, fmt.Errorf("reading response upstream: %w", err)
 	}
 
-	err = fields.CheckTransferCodingSupport(final.Fields.TransferCodings)
-	if err == nil {
-		err = prepareResponse(final)
-	}
-
-	if err != nil {
+	if err := prepareResponse(final); err != nil {
 		if closeErr := final.Body.Close(); closeErr != nil {
 			log.Printf("closing response body: %v", closeErr)
 		}

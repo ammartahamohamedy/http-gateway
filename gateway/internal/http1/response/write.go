@@ -26,7 +26,8 @@ import (
 //
 // The writer frames the body itself with fields.WithFraming, never copying the
 // received framing fields. A 1xx or 204 response carries no framing fields. A
-// 304 response, and any response to HEAD, declares the Content-Length in Fields
+// 205 response declares Content-Length: 0 and sends no content, whatever it
+// received (RFC 9110, Section 15.3.6). A 304 response, and any response to HEAD, declares the Content-Length in Fields
 // when present but has no body. Otherwise a declared Content-Length is written
 // with exactly that many bytes, and a response without one is written chunked.
 // Its Trailer field names the allowed fields from Fields.TrailerNames, and only
@@ -58,6 +59,8 @@ func Write(writer io.Writer, message *Message, requestMethod string) error {
 
 	switch {
 	case line.StatusCode < 200 || line.StatusCode == 204:
+	case line.StatusCode == 205:
+		declared = body.ContentLength
 	case line.StatusCode == 304 || requestMethod == "HEAD":
 		if parsed.ContentLengthPresent {
 			declared, length = body.ContentLength, parsed.ContentLength

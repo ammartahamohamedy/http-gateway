@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"bytes"
+	"errors"
+	"fmt"
 	"io"
 	"maps"
 	"slices"
@@ -28,6 +30,16 @@ var (
 	// forwardingFields lists client-supplied forwarding metadata, dropped since
 	// the gateway cannot vouch for it.
 	forwardingFields = []string{"forwarded", "x-forwarded-for", "x-forwarded-host", "x-forwarded-proto"}
+
+	// proxyAuthenticationFields lists the response fields of proxy
+	// authentication, which concern only the hop between the gateway and the
+	// backend (RFC 9110, Section 11.7).
+	proxyAuthenticationFields = []string{"proxy-authenticate", "proxy-authentication-info"}
+
+	// errUnrelayableStatus reports a final response whose meaning does not
+	// survive the gateway: 407 asks for credentials on the gateway's own hop,
+	// and 426 requires an Upgrade the gateway strips.
+	errUnrelayableStatus = errors.New("proxy: upstream status cannot be relayed")
 )
 
 // prepareRequest turns message, whose body was buffered as content, into the
@@ -69,29 +81,35 @@ func prepareRequest(message *request.Message, content []byte, upstream string) {
 
 // prepareResponse turns message, an interim or final response read from
 // upstream, into the one sent to the client, in place. It drops the hop-by-hop
-// fields, from the header section and from the trailers response.Write
-// announces (Fields.TrailerNames), and appends gatewayVia; a final response also gets a Date when it has
-// none (RFC 9110, Section 6.6.1) and Connection: close. Interim responses skip
-// response.Read's field stage, so Connection is parsed here; an invalid list
-// returns the fields.ParseConnection error and leaves message unchanged, and
+// fields and proxyAuthenticationFields, from the header section and from the
+// trailers response.Write announces (Fields.TrailerNames), appends gatewayVia,
+// and adds a Date when the response has none, as a recipient forwarding a
+// response must (RFC 9110, Section 6.6.1); a final response also gets
+// Connection: close. Interim responses skip response.Read's field stage, so
+// Connection is parsed here. A status errUnrelayableStatus covers, or an
+// invalid Connection list, returns an error and leaves message unchanged, and
 // the response is not relayed.
 func prepareResponse(message *response.Message) error {
+	if message.Line.StatusCode == 407 || message.Line.StatusCode == 426 {
+		return fmt.Errorf("%w: %d", errUnrelayableStatus, message.Line.StatusCode)
+	}
+
 	options, err := fields.ParseConnection(message.Headers.Values("Connection"))
 	if err != nil {
 		return err
 	}
 
-	dropped := slices.Concat(hopByHopFields, options)
+	dropped := slices.Concat(hopByHopFields, options, proxyAuthenticationFields)
 	headers := withoutFields(message.Headers, dropped)
 	message.Fields.TrailerNames = slices.DeleteFunc(slices.Clone(message.Fields.TrailerNames), func(name string) bool {
 		return slices.Contains(dropped, name)
 	})
 	headers["via"] = append(slices.Clone(headers["via"]), gatewayVia)
+	if len(headers["date"]) == 0 {
+		headers["date"] = []string{fields.FormatDate(time.Now())}
+	}
 
 	if message.Line.StatusCode >= 200 {
-		if len(headers["date"]) == 0 {
-			headers["date"] = []string{fields.FormatDate(time.Now())}
-		}
 		headers["connection"] = []string{"close"}
 	}
 

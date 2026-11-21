@@ -143,8 +143,40 @@ func TestPrepareResponseInterim(t *testing.T) {
 	}
 
 	require.NoError(t, prepareResponse(message))
+	require.NoError(t, fields.ValidateDate(message.Headers.Values("Date")), "a forwarded interim response gets a Date too")
+	delete(message.Headers, "date")
 	require.Equal(t, header.Section{"link": {"</a.css>"}, "via": {gatewayVia}}, message.Headers,
-		"an interim response gets neither Date nor Connection: close")
+		"an interim response does not get Connection: close")
+}
+
+func TestPrepareResponseDropsProxyAuthenticationFields(t *testing.T) {
+	message := &response.Message{
+		Line: response.Line{Version: "1.1", StatusCode: 401},
+		Headers: header.Section{
+			"www-authenticate":          {"Basic realm=\"search\""},
+			"proxy-authenticate":        {"Basic realm=\"backend\""},
+			"proxy-authentication-info": {"nextnonce=\"abc\""},
+		},
+		Fields: response.Fields{TrailerNames: []string{"proxy-authentication-info", "server-timing"}},
+	}
+
+	require.NoError(t, prepareResponse(message))
+	require.Equal(t, []string{"Basic realm=\"search\""}, message.Headers.Values("WWW-Authenticate"), "origin authentication stays")
+	require.Empty(t, message.Headers.Values("Proxy-Authenticate"))
+	require.Empty(t, message.Headers.Values("Proxy-Authentication-Info"))
+	require.Equal(t, []string{"server-timing"}, message.Fields.TrailerNames)
+}
+
+func TestPrepareResponseRefusesUnrelayableStatuses(t *testing.T) {
+	for status := range slices.Values([]int{407, 426}) {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			headers := header.Section{"upgrade": {"h2c"}}
+			message := &response.Message{Line: response.Line{Version: "1.1", StatusCode: status}, Headers: headers}
+
+			require.ErrorIs(t, prepareResponse(message), errUnrelayableStatus)
+			require.Equal(t, header.Section{"upgrade": {"h2c"}}, message.Headers, "message is left unchanged")
+		})
+	}
 }
 
 func TestPrepareResponseRefusesAnInvalidConnectionList(t *testing.T) {

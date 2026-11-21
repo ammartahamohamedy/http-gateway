@@ -262,3 +262,29 @@ func TestWriteSendsOnlyAnnouncedTrailers(t *testing.T) {
 	require.Equal(t, "HTTP/1.1 200 OK\r\ntrailer: server-timing\r\ntransfer-encoding: chunked\r\n\r\n"+
 		"2\r\nhi\r\n0\r\nserver-timing: db;dur=5\r\n\r\n", output.String())
 }
+
+func TestWriteSendsNoContentFor205(t *testing.T) {
+	tests := []struct {
+		name    string
+		parsed  Fields
+		content string
+	}{
+		{"declared length", Fields{ContentLength: 3, ContentLengthPresent: true}, "abc"},
+		{"chunked", Fields{TransferCodings: []string{"chunked"}}, "abc"},
+		{"no content", Fields{}, ""},
+	}
+
+	for test := range slices.Values(tests) {
+		t.Run(test.name, func(t *testing.T) {
+			message := &Message{
+				Line:   Line{StatusCode: 205},
+				Fields: test.parsed,
+				Body:   io.NopCloser(strings.NewReader(test.content)),
+			}
+
+			var output bytes.Buffer
+			require.NoError(t, Write(&output, message, "POST"))
+			require.Equal(t, "HTTP/1.1 205 Reset Content\r\ncontent-length: 0\r\n\r\n", output.String())
+		})
+	}
+}
