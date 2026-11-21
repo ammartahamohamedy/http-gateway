@@ -3,6 +3,7 @@ package proxy
 import (
 	"bufio"
 	"errors"
+	"io"
 	"log"
 	"net"
 	"time"
@@ -14,6 +15,9 @@ import (
 // errUnsupportedMethod reports TRACE, which the gateway does not implement
 // rather than reflect requests back to clients.
 var errUnsupportedMethod = errors.New("proxy: TRACE is not supported")
+
+// lingerTimeout bounds how long closeClient keeps reading after the response.
+var lingerTimeout = 2 * time.Second
 
 // requestHeadTimeout bounds reading the whole request head, so a client sending
 // it slowly cannot hold the connection. A per-line cap alone would not stop that.
@@ -43,14 +47,10 @@ type Config struct {
 // A request that fails to read or is refused gets the status
 // requestErrorStatus chooses, and an upstream failure before the final
 // response is committed gets the one upstreamErrorStatus chooses, both written
-// by writeGatewayResponse. The connection is closed before returning, and every
-// error is logged without terminating the listener.
+// by writeGatewayResponse. The connection is closed in stages (closeClient)
+// before returning, and every error is logged without terminating the listener.
 func HandleConnection(connection net.Conn, config Config) {
-	defer func() {
-		if err := connection.Close(); err != nil {
-			log.Printf("closing connection: %v", err)
-		}
-	}()
+	defer closeClient(connection)
 
 	reject := func(err error, requestMethod string) {
 		log.Printf("rejecting request: %v", err)
@@ -119,4 +119,29 @@ func admitRequest(message *request.Message, config Config) error {
 	}
 
 	return fields.CheckExpectationSupport(message.Fields.Expectations)
+}
+
+// closeClient closes connection in stages (RFC 9112, Section 9.6): it ends the
+// sending side, then discards what the client still sends until the client
+// closes or lingerTimeout passes, and only then closes. Closing at once with
+// request bytes unread makes the kernel reset the connection, which can
+// destroy the response before the client reads it, as when a refused upload is
+// still arriving. A connection that cannot be half-closed is closed at once.
+func closeClient(connection net.Conn) {
+	defer func() {
+		if err := connection.Close(); err != nil {
+			log.Printf("closing connection: %v", err)
+		}
+	}()
+
+	halfCloser, ok := connection.(interface{ CloseWrite() error })
+	if !ok || halfCloser.CloseWrite() != nil {
+		return
+	}
+
+	if connection.SetReadDeadline(time.Now().Add(lingerTimeout)) != nil {
+		return
+	}
+
+	_, _ = io.Copy(io.Discard, connection)
 }

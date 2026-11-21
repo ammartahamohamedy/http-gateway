@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"bytes"
 	"io"
 	"net"
 	"slices"
@@ -260,4 +261,68 @@ func TestHandleConnectionAnswers502WhenTheBodyFailsBeforeAnyByte(t *testing.T) {
 	message, content := exchange(t, "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n", testConfig(upstream))
 	require.Equal(t, 502, message.Line.StatusCode)
 	require.Empty(t, content)
+}
+
+// serveTCP runs HandleConnection on one accepted loopback TCP connection,
+// which, unlike net.Pipe, can be half-closed.
+func serveTCP(t *testing.T, config Config) (net.Conn, <-chan struct{}) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		connection, err := listener.Accept()
+		if err == nil {
+			HandleConnection(connection, config)
+		}
+	}()
+
+	client, err := net.Dial("tcp", listener.Addr().String())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Close() })
+
+	return client, done
+}
+
+func TestHandleConnectionClosesInStagesAfterAnEarlyRejection(t *testing.T) {
+	client, done := serveTCP(t, testConfig(unusedAddress(t)))
+
+	_, err := io.WriteString(client, "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 4000000\r\n\r\n")
+	require.NoError(t, err)
+
+	reader := bufio.NewReader(client)
+	message, err := response.Read(reader, "POST", nil)
+	require.NoError(t, err)
+	require.Equal(t, 413, message.Line.StatusCode)
+	_, err = reader.ReadByte()
+	require.ErrorIs(t, err, io.EOF, "the gateway ends its side with a FIN, not a reset")
+
+	chunk := bytes.Repeat([]byte("a"), 64*1024)
+	for range 16 {
+		_, err := client.Write(chunk)
+		require.NoError(t, err, "the gateway still reads, so the rest of the upload is not reset")
+		time.Sleep(5 * time.Millisecond)
+	}
+
+	require.NoError(t, client.Close())
+	waitForHandler(t, done)
+}
+
+func TestHandleConnectionStopsLingeringAfterLingerTimeout(t *testing.T) {
+	previous := lingerTimeout
+	lingerTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { lingerTimeout = previous })
+
+	client, done := serveTCP(t, testConfig(unusedAddress(t)))
+	_, err := io.WriteString(client, "GET / HTTP/1.1\r\nHost: evil.example\r\n\r\n")
+	require.NoError(t, err)
+
+	message, err := response.Read(bufio.NewReader(client), "GET", nil)
+	require.NoError(t, err)
+	require.Equal(t, 421, message.Line.StatusCode)
+
+	waitForHandler(t, done)
 }

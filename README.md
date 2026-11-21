@@ -10,17 +10,12 @@ The handwritten Go HTTP/1.1 implementation is being built against these specific
 - [RFC 9110: HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110.html) - methods, status codes, field meanings, and shared HTTP rules.
 - [RFC 9112: HTTP/1.1](https://www.rfc-editor.org/rfc/rfc9112.html) - message syntax, parsing, framing, and connection management.
 
-## Current scaffold
+## Current state
 
-- The existing Go request-line parser, streaming line reader, executable and
-  tests live under `gateway/`.
-- The root Cargo workspace currently contains only `backend`, a minimal Rust
-  binary package. It prints its scaffold status and exits; it is not an HTTP
-  server yet.
-- `client/src/`, `docs/`, `scripts/` and `tests/` are reserved directories for
-  later work. Empty directories are not tracked by Git.
-- Forwarding, Rust HTTP serving, search indexing/querying, and the Ratatui client
-  remain to be implemented. No HTTP or TUI dependency has been selected yet.
+- `gateway/` holds the handwritten Go HTTP/1.1 reverse proxy. It reads and validates requests, forwards them to the backend, and relays the responses, answering refused requests and backend failures with its own statuses. See the [Go component instructions](gateway/README.md).
+- The root Cargo workspace contains only `backend`, a minimal Rust binary package. It prints its scaffold status and exits; it is not an HTTP server yet, so a forwarded request currently gets 502.
+- `client/src/`, `docs/`, `scripts/` and `tests/` are reserved directories for later work. Empty directories are not tracked by Git.
+- Rust HTTP serving, search indexing and querying, concurrent connection handling, CORS, and the Ratatui client remain to be implemented. No Rust HTTP or TUI dependency has been selected yet.
 
 ## Layout
 
@@ -32,7 +27,9 @@ http-gateway/
 │   ├── go.mod
 │   ├── go.sum
 │   ├── main.go
-│   └── internal/http1/        # Existing handwritten implementation and tests
+│   └── internal/
+│       ├── http1/             # Handwritten HTTP/1.1 readers, writers, and field validation
+│       └── proxy/             # Exchange: client socket, forwarding policy, upstream, statuses
 ├── backend/                   # Rust package: search-backend
 │   ├── Cargo.toml
 │   └── src/main.rs
@@ -60,15 +57,15 @@ cargo check --workspace --locked
 cargo fmt --all -- --check
 ```
 
-Start the existing Go request-line reader:
+Start the Go gateway:
 
 ```sh
 go -C gateway run .
 ```
 
-It listens on `127.0.0.1:8080` by default, reads one request-line per connection,
-and closes the connection. It does not send HTTP responses yet. See the
-[Go component instructions](gateway/README.md) for manual verification.
+It listens on `127.0.0.1:8080` by default and forwards to the backend at
+`127.0.0.1:8081`. See the [Go component instructions](gateway/README.md) for
+its flags and a manual check.
 
 Run the Rust entry point:
 
